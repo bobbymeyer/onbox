@@ -1,0 +1,11 @@
+claude_code:
+  name: claude-code
+  kind: claude_code
+  card_type: agent
+  token: claude-code-test-token
+
+printer:
+  name: printer
+  kind: generic
+  card_type: generic
+  token: printer-test-token

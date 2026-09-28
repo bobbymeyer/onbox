@@ -1,0 +1,286 @@
+/* The Stack: index cards on a desk. Phone first. */
+
+:root {
+  --desk: #e9e3d6;
+  --paper: #fffdf7;
+  --ink: #1f1d1a;
+  --ink-soft: #6b665d;
+  --rule-red: #d4504a;
+  --rule-blue: #b9cde3;
+  --accent: #2f5d8a;
+  --accent-ink: #ffffff;
+  --stamp: #8a2f2f;
+  --stale: #b0602a;
+  --line: #ddd6c7;
+  --danger: #a33a2c;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 8px 24px rgb(0 0 0 / 0.08);
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --desk: #1c1a17;
+    --paper: #2a2723;
+    --ink: #f1ece2;
+    --ink-soft: #a59e91;
+    --rule-red: #c0544e;
+    --rule-blue: #3a4a5c;
+    --accent: #7fa8d6;
+    --accent-ink: #14202c;
+    --stamp: #e08a82;
+    --stale: #e0a06a;
+    --line: #3b3731;
+    --danger: #e0806f;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.3);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--desk);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 17px;
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+}
+
+a { color: var(--accent); }
+code, pre, .mono { font-family: var(--mono); font-size: 0.85em; }
+pre { white-space: pre-wrap; word-break: break-word; }
+
+button, input, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+
+.flash {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  padding-top: calc(0.5rem + env(safe-area-inset-top));
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+.flash-alert { color: var(--danger); }
+
+.hint { color: var(--ink-soft); font-size: 0.85rem; margin: 0.25rem 0; }
+.hint:empty { display: none; }
+
+/* ---------- Dispenser ---------- */
+
+body.dispenser {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin: 0.75rem;
+  margin-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  padding: 1.25rem 1.1rem 1rem;
+  background: var(--paper);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border-top: 3px solid var(--rule-red);
+}
+
+@media (min-width: 720px) {
+  .card { max-width: 640px; width: 100%; margin: 2rem auto; flex: 0 0 auto; }
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+.card-source { font-weight: 600; }
+.card-project::before { content: "/ "; opacity: 0.6; }
+.card-age { margin-left: auto; }
+.card-age.stale { color: var(--stale); font-weight: 600; }
+
+.card-context {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--rule-blue);
+}
+
+.card-summary {
+  font-size: 1.35rem;
+  line-height: 1.25;
+  margin: 0.6rem 0 0.5rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.card-ask {
+  display: inline-block;
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--stamp);
+}
+.maint-card .card-ask { font-size: 0.7rem; }
+
+.card-proposed {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid var(--rule-blue);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--rule-blue) 18%, transparent);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.95rem;
+}
+.card-proposed p { margin: 0 0 0.4rem; }
+.card-proposed p:last-child { margin-bottom: 0; }
+
+.card-action { display: flex; flex-direction: column; gap: 0.9rem; }
+
+.stamp-tray { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.stamp-form { margin: 0; }
+.stamp {
+  appearance: none;
+  border: 2px solid var(--stamp);
+  color: var(--stamp);
+  background: transparent;
+  border-radius: 6px;
+  padding: 0.55rem 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transform: rotate(-0.6deg);
+}
+.stamp:active { transform: scale(0.96) rotate(-0.6deg); background: color-mix(in srgb, var(--stamp) 12%, transparent); }
+.stamp:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.more-stamps summary, .card-back summary, .card-raw summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+.more-stamps .stamp-tray { margin-top: 0.5rem; }
+
+.tool { display: flex; flex-direction: column; gap: 0.4rem; }
+.tool-label { font-size: 0.75rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.06em; }
+.tool textarea, .stack-form input[type=text], .stack-form textarea, .stack-form select, .defer-later input {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  resize: vertical;
+}
+.tool-send, .stack-form input[type=submit] {
+  align-self: flex-end;
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.6rem 1.1rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.card-back { border-top: 1px dashed var(--line); padding-top: 0.75rem; }
+.card-payload { font-size: 0.9rem; overflow-wrap: anywhere; max-height: 50vh; overflow: auto; }
+.card-raw pre { font-size: 0.75rem; max-height: 40vh; overflow: auto; }
+
+.card-defer {
+  margin-top: auto;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.defer-top { margin: 0; }
+.defer-later { display: flex; gap: 0.5rem; flex: 1; margin: 0; }
+.defer-later input[type=text] { padding: 0.45rem 0.6rem; font-size: 0.85rem; min-width: 0; }
+.defer-button {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+}
+.empty-line { font-size: 1.3rem; margin: 0; }
+.empty-sub { color: var(--ink-soft); margin: 0.4rem 0 2rem; }
+.quiet-link { color: var(--ink-soft); font-size: 0.9rem; }
+
+/* ---------- Maintenance ---------- */
+
+.maintenance-view {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 1rem;
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom));
+}
+.maintenance-view h1 { margin: 0.5rem 0 0.25rem; font-size: 1.5rem; }
+.maintenance-view h2 { font-size: 1rem; margin: 1.75rem 0 0.5rem; }
+.maintenance-view h2 .hint { font-weight: 400; margin-left: 0.4rem; }
+.maint-nav { display: flex; gap: 1rem; font-size: 0.9rem; flex-wrap: wrap; }
+.maint-stats { color: var(--ink-soft); margin: 0; font-size: 0.9rem; }
+
+.maint-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.maint-card {
+  background: var(--paper);
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+  border-left: 3px solid var(--rule-red);
+}
+.maint-card.is-blocked { opacity: 0.65; border-left-color: var(--line); }
+.maint-card.is-handled { border-left-color: var(--line); }
+.maint-summary { margin: 0.3rem 0; font-weight: 600; overflow-wrap: anywhere; }
+
+.maint-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-top: 0.4rem; font-size: 0.85rem; }
+.maint-actions form { margin: 0; }
+.maint-actions button, .maint-actions a {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
+}
+.maint-actions .danger { color: var(--danger); }
+
+.stack-form { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 1rem; }
+.stack-form label { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.5rem; }
+.stack-form label.check { display: flex; gap: 0.5rem; align-items: center; color: var(--ink); font-size: 0.9rem; }
+.form-errors { color: var(--danger); padding-left: 1.2rem; }
+.token { display: block; overflow-wrap: anywhere; margin: 0.4rem 0; }

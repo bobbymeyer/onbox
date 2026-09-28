@@ -1,0 +1,31 @@
+<% content_for :title, "Stamps" %>
+<main class="maintenance-view">
+  <nav class="maint-nav">
+    <%= link_to "← Stack", maintenance_path %>
+    <%= link_to "New stamp", new_stamp_path %>
+  </nav>
+  <h1>Stamps</h1>
+  <p class="hint">A stamp bundles a message, an action, and what it sets in motion afterward.</p>
+  <ul class="maint-list">
+    <% @stamps.each do |stamp| %>
+      <li class="maint-card">
+        <div class="card-meta">
+          <span class="card-source"><%= stamp.card_type %></span>
+          <span><%= stamp.action_kind %></span>
+          <% if stamp.repeat_every %><span>repeats <%= stamp.repeat_every %></span><% end %>
+          <% if stamp.requires_flip %><span>flip first</span><% end %>
+          <span><%= pluralize stamp.use_count, "use" %></span>
+        </div>
+        <p class="maint-summary"><%= stamp.label %></p>
+        <% if stamp.template.present? %><p class="hint"><%= stamp.template %></p><% end %>
+        <% if stamp.successor_specs.any? %>
+          <p class="hint">Then: <%= stamp.successor_specs.map { |s| s["summary"] }.join(" → ") %></p>
+        <% end %>
+        <div class="maint-actions">
+          <%= link_to "Edit", edit_stamp_path(stamp) %>
+          <%= button_to "Delete", stamp_path(stamp), method: :delete, class: "danger", data: { turbo_confirm: "Delete #{stamp.label}?" } %>
+        </div>
+      </li>
+    <% end %>
+  </ul>
+</main>

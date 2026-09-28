@@ -1,0 +1,5 @@
+<%= form_with url: reply_card_path(card), class: "tool tool-agent" do |f| %>
+  <%= f.label :text, card.type.tool_label, class: "tool-label" %>
+  <%= f.text_area :text, value: card.proposed_action, placeholder: card.type.tool_placeholder, rows: 3 %>
+  <%= f.submit "Send to agent", class: "tool-send" %>
+<% end %>

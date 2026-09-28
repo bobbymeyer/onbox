@@ -1,0 +1,34 @@
+approve:
+  label: Approve
+  card_type: any
+  action: { "kind": "instruct" }
+  successors: []
+
+pr_and_merge:
+  label: PR and merge
+  card_type: agent
+  action: { "kind": "instruct" }
+  template: Open a PR for {{project}} and merge it once CI is green.
+  successors:
+    - { "summary": "Deploy {{project}}", "ask": "acknowledge" }
+    - { "summary": "Announce {{project}}", "ask": "reply" }
+
+done:
+  label: Done
+  card_type: any
+  action: { "kind": "handle" }
+  successors: []
+
+weekly_review:
+  label: Weekly
+  card_type: generic
+  action: { "kind": "handle", "repeat": "1 week" }
+  successors: []
+
+force_push:
+  label: Force push
+  card_type: agent
+  action: { "kind": "instruct" }
+  template: Force push it.
+  requires_flip: true
+  successors: []

@@ -1,0 +1,6 @@
+<% content_for :title, "New stamp" %>
+<main class="maintenance-view">
+  <nav class="maint-nav"><%= link_to "← Stamps", stamps_path %></nav>
+  <h1>New stamp</h1>
+  <%= render "form", stamp: @stamp %>
+</main>

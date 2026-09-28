@@ -1,0 +1,14 @@
+{
+  "env": {
+    "STACK_URL": "http://mac-studio:3000",
+    "STACK_TOKEN": "paste the claude-code source token here"
+  },
+  "hooks": {
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "/path/to/onbox/script/stack-hook" } ] }
+    ],
+    "Notification": [
+      { "hooks": [ { "type": "command", "command": "/path/to/onbox/script/stack-hook" } ] }
+    ]
+  }
+}

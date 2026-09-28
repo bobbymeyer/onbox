@@ -1,0 +1,13 @@
+#!/bin/sh
+# Claude Code hook -> The Stack intake. Reads the hook's JSON input on stdin
+# and POSTs it untouched. Never blocks or fails the agent's turn.
+#
+#   STACK_URL    e.g. http://mac-studio.tailnet-name.ts.net:3000
+#   STACK_TOKEN  the claude-code source token (see /sources)
+[ -n "$STACK_URL" ] && [ -n "$STACK_TOKEN" ] || exit 0
+curl -sS --max-time 5 -o /dev/null \
+  -H "Authorization: Bearer $STACK_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data-binary @- \
+  "$STACK_URL/intake" || true
+exit 0

@@ -1,0 +1,19 @@
+<% content_for :title, "Edit card" %>
+<main class="maintenance-view">
+  <nav class="maint-nav"><%= link_to "← Stack", maintenance_path %></nav>
+  <h1>Edit card</h1>
+  <%= form_with model: @card, class: "stack-form" do |f| %>
+    <%= render "shared/errors", record: @card %>
+    <%= f.label :project %>
+    <%= f.text_field :project %>
+    <%= f.label :summary %>
+    <%= f.text_field :summary %>
+    <%= f.label :ask %>
+    <%= f.select :ask, Card::ASKS %>
+    <%= f.label :card_type %>
+    <%= f.select :card_type, CardType::NAMES %>
+    <%= f.label :proposed_action %>
+    <%= f.text_area :proposed_action, rows: 4 %>
+    <%= f.submit "Save" %>
+  <% end %>
+</main>

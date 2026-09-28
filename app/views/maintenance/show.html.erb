@@ -1,0 +1,73 @@
+<% content_for :title, "Stack · maintenance" %>
+<%= turbo_stream_from "stack" %>
+
+<main class="maintenance-view">
+  <nav class="maint-nav">
+    <%= link_to "← Dispenser", root_path %>
+    <%= link_to "Stamps", stamps_path %>
+    <%= link_to "Sources", sources_path %>
+  </nav>
+
+  <header class="maint-header">
+    <h1>The stack</h1>
+    <p class="maint-stats">
+      <%= pluralize @live.size, "live card" %> · <%= @held.size %> held
+      <% if @flip_rate %> · flip rate <%= @flip_rate %>% (7d)<% end %>
+    </p>
+  </header>
+
+  <section>
+    <h2>Live <span class="hint">front of the stack first</span></h2>
+    <% if @live.empty? %>
+      <p class="hint">Empty.</p>
+    <% end %>
+    <ol class="maint-list">
+      <% @live.each do |card| %>
+        <li class="maint-card <%= "is-blocked" if card.blocked? %>">
+          <%= render "maintenance/card_line", card: card %>
+          <div class="maint-actions">
+            <%= button_to "To front", bottom_card_path(card) %>
+            <%= button_to "To top", top_card_path(card, return_to: "stack") %>
+            <%= link_to "Edit", edit_card_path(card) %>
+            <%= button_to "Delete", card_path(card), method: :delete, class: "danger", data: { turbo_confirm: "Delete this card?" } %>
+          </div>
+        </li>
+      <% end %>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Held</h2>
+    <% if @held.empty? %>
+      <p class="hint">Nothing held.</p>
+    <% end %>
+    <ul class="maint-list">
+      <% @held.each do |card| %>
+        <li class="maint-card">
+          <%= render "maintenance/card_line", card: card %>
+          <p class="hint">Until <%= hold_description(card) %></p>
+          <div class="maint-actions">
+            <%= button_to "Release", release_card_path(card) %>
+            <%= link_to "Edit", edit_card_path(card) %>
+            <%= button_to "Delete", card_path(card), method: :delete, class: "danger", data: { turbo_confirm: "Delete this card?" } %>
+          </div>
+        </li>
+      <% end %>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Recently handled</h2>
+    <% if @recent.empty? %>
+      <p class="hint">Nothing yet.</p>
+    <% end %>
+    <ul class="maint-list">
+      <% @recent.each do |card| %>
+        <li class="maint-card is-handled">
+          <%= render "maintenance/card_line", card: card %>
+          <p class="hint"><%= card.handled_with %> · <%= time_ago_in_words(card.handled_at) %> ago<% if card.flip_count > 0 %> · flipped<% end %></p>
+        </li>
+      <% end %>
+    </ul>
+  </section>
+</main>

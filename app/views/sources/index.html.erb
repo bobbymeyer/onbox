@@ -1,0 +1,34 @@
+<% content_for :title, "Sources" %>
+<main class="maintenance-view">
+  <nav class="maint-nav"><%= link_to "← Stack", maintenance_path %></nav>
+  <h1>Sources</h1>
+  <p class="hint">Each source POSTs JSON to <code><%= intake_url %></code> with <code>Authorization: Bearer &lt;token&gt;</code>.</p>
+  <ul class="maint-list">
+    <% @sources.each do |source| %>
+      <li class="maint-card">
+        <div class="card-meta">
+          <span class="card-source"><%= source.kind %></span>
+          <span><%= source.card_type %> cards</span>
+        </div>
+        <p class="maint-summary"><%= source.name %></p>
+        <details>
+          <summary>Token</summary>
+          <code class="token"><%= source.token %></code>
+        </details>
+        <div class="maint-actions">
+          <%= button_to "Delete", source_path(source), method: :delete, class: "danger", data: { turbo_confirm: "Delete #{source.name}? Its cards stay." } %>
+        </div>
+      </li>
+    <% end %>
+  </ul>
+
+  <h2>New source</h2>
+  <%= form_with model: @source, class: "stack-form" do |f| %>
+    <%= render "shared/errors", record: @source %>
+    <%= f.label :name %>
+    <%= f.text_field :name, required: true, placeholder: "claude-code, printer, ci" %>
+    <%= f.label :kind %>
+    <%= f.select :kind, Source::KINDS %>
+    <%= f.submit "Create source" %>
+  <% end %>
+</main>

@@ -1,0 +1,6 @@
+<%= button_to stamp.label, stamp_card_path(card, stamp_id: stamp.id),
+      class: "stamp",
+      form_class: "stamp-form",
+      disabled: stamp.requires_flip,
+      title: stamp.requires_flip ? "Flip the card before this one will send" : card.interpolate(stamp.template.presence || card.proposed_action).truncate(140),
+      data: { flip_target: (stamp.requires_flip ? "gated" : nil) } %>

@@ -1,0 +1,10 @@
+module Intake
+  module Normalizer
+    def self.for(source)
+      case source.kind
+      when "claude_code" then ClaudeCode
+      else Generic
+      end
+    end
+  end
+end

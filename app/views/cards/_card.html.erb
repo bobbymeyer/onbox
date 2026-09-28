@@ -1,0 +1,59 @@
+<%# Dispenser card anatomy, top to bottom: context, action, defer. %>
+<article class="card" data-controller="flip" data-flip-url-value="<%= flip_card_path(card) %>">
+  <header class="card-context">
+    <div class="card-meta">
+      <span class="card-source"><%= card.source&.name || "stack" %></span>
+      <% if card.project.present? %><span class="card-project"><%= card.project %></span><% end %>
+      <time class="card-age <%= "stale" if stale?(card) %>" datetime="<%= card.created_at.iso8601 %>"><%= card_age(card) %></time>
+    </div>
+    <h1 class="card-summary"><%= card.summary %></h1>
+    <p class="card-ask ask-<%= card.ask %>"><%= ask_label(card) %></p>
+    <% if card.proposed_action.present? %>
+      <blockquote class="card-proposed"><%= simple_format card.proposed_action %></blockquote>
+    <% end %>
+  </header>
+
+  <section class="card-action">
+    <% if stamps.shown.any? %>
+      <div class="stamp-tray">
+        <% stamps.shown.each do |stamp| %>
+          <%= render "cards/stamp", card: card, stamp: stamp %>
+        <% end %>
+      </div>
+      <% if stamps.more.any? %>
+        <details class="more-stamps">
+          <summary>More stamps</summary>
+          <div class="stamp-tray">
+            <% stamps.more.each do |stamp| %>
+              <%= render "cards/stamp", card: card, stamp: stamp %>
+            <% end %>
+          </div>
+        </details>
+      <% end %>
+    <% end %>
+
+    <%= render "cards/types/#{card.type.name}", card: card %>
+  </section>
+
+  <details class="card-back" data-action="toggle->flip#flipped">
+    <summary>Flip</summary>
+    <% if (body = card_body(card)) %>
+      <div class="card-payload"><%= simple_format body %></div>
+    <% end %>
+    <details class="card-raw">
+      <summary>Raw payload</summary>
+      <pre><%= JSON.pretty_generate(card.payload.except("body", "last_assistant_message")) %></pre>
+    </details>
+  </details>
+
+  <footer class="card-defer">
+    <%= button_to "Top of the stack", top_card_path(card), class: "defer-button", form_class: "defer-top" %>
+    <%= form_with url: later_card_path(card), class: "defer-later" do |f| %>
+      <%= f.text_field :when, placeholder: "tonight, 2h, friday…", list: "later-choices", required: true, autocomplete: "off", aria: { label: "Later" } %>
+      <datalist id="later-choices">
+        <% CardsHelper::LATER_CHOICES.each do |choice| %><option value="<%= choice %>"><% end %>
+      </datalist>
+      <%= f.submit "Later", class: "defer-button" %>
+    <% end %>
+  </footer>
+</article>
