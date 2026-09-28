@@ -16,7 +16,7 @@ module Gestures
       reseed(card, stamp.repeat_every) if stamp.repeat_every
     end
 
-    card.type.deliver(card, message) if %w[instruct reply].include?(stamp.action_kind)
+    card.type.perform(stamp.action_kind, card, message)
     card
   end
 
@@ -27,7 +27,7 @@ module Gestures
       card.handlings.create!(verb: "reply", text: text)
       card.handle!(with: "reply")
     end
-    card.type.deliver(card, text)
+    card.type.perform("reply", card, text)
     card
   end
 

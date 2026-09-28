@@ -53,3 +53,24 @@ class DispenserControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
   end
 end
+
+class SourcesControllerTest < ActionDispatch::IntegrationTest
+  test "saves an email source's search" do
+    source = connect(sources(:gmail))
+    patch source_url(source), params: { source: { email_query: "in:inbox is:important" } }
+    assert_redirected_to sources_url
+    assert_equal "in:inbox is:important", source.reload.email_query
+  end
+
+  test "shows connection state" do
+    get sources_url
+    assert_match "gmail:connect[gmail]", response.body
+  end
+
+  test "email cards render a reply box addressed to the sender" do
+    email_card
+    get root_url
+    assert_select ".tool-email label", "Reply to Ada Lovelace <ada@example.com>"
+    assert_select "button.stamp", "Archive"
+  end
+end

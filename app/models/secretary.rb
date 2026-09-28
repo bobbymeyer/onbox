@@ -20,7 +20,9 @@ class Secretary
     - proposed_action: the response you would send on his behalf, drafted in his
       voice (terse, direct, no pleasantries), ready for one-tap approval. For an
       agent card this is the next instruction to the agent. Empty string when
-      the ask is "acknowledge".
+      the ask is "acknowledge". For an email card it is the reply body only: no
+      subject, no signature, a greeting only if Bobby would plainly use one.
+      Newsletters, receipts and automated mail are "acknowledge".
     - likely_stamps: up to three labels from the available stamps that best fit
       this card, most likely first. Only use labels from the list given.
 
@@ -126,6 +128,9 @@ class Secretary
     def known_event_keys(card)
       keys = Source.pluck(:name)
       keys << "claude_code:stop:#{card.project}" if card&.project.present?
+      if card&.card_type == "email" && (address = (Mail::Address.new(card.payload["from"].to_s).address rescue nil))
+        keys << "#{card.source.name}:from:#{address.downcase}"
+      end
       keys
     end
 

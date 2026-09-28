@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_28_203638) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_28_215104) do
   create_table "cards", force: :cascade do |t|
     t.integer "source_id"
     t.string "key"
@@ -58,6 +58,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_28_203638) do
     t.string "card_type", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.json "settings", default: {}, null: false
+    t.text "secret"
     t.index ["name"], name: "index_sources_on_name", unique: true
     t.index ["token"], name: "index_sources_on_token", unique: true
   end

@@ -1,12 +1,12 @@
 # A saved action applied in one motion. It bundles a message (template), an
 # action, and the cards it seeds afterwards (successors).
 #
-# action:     { "kind" => "instruct" | "reply" | "handle", "repeat" => "1 week" }
+# action:     { "kind" => "instruct" | "reply" | "archive" | "handle", "repeat" => "1 week" }
 # successors: [{ "summary" => "Deploy {{project}}", "ask" => "acknowledge",
 #                "card_type" => "generic", "later" => "tomorrow morning",
 #                "parallel" => false }]
 class Stamp < ApplicationRecord
-  ACTION_KINDS = %w[instruct reply handle].freeze
+  ACTION_KINDS = %w[instruct reply handle archive].freeze
 
   has_many :handlings, dependent: :nullify
 
@@ -36,10 +36,14 @@ class Stamp < ApplicationRecord
     action.fetch("kind", "handle")
   end
 
-  # A sending stamp with no template needs a drafted proposed action to send.
+  # The card's type must be able to carry the action out, and a sending stamp
+  # with no template needs a drafted proposed action to send.
   def applicable_to?(card)
-    action_kind == "handle" || template.present? || card.proposed_action.present?
+    return false unless card.type.supports?(action_kind)
+    SENDING.exclude?(action_kind) || template.present? || card.proposed_action.present?
   end
+
+  SENDING = %w[instruct reply].freeze
 
   def repeat_every
     action["repeat"].presence

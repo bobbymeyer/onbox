@@ -82,6 +82,20 @@ class Card < ApplicationRecord
     end
   end
 
+  # Something went wrong carrying out Bobby's decision; it comes back as a card
+  # rather than dropping silently.
+  def report_failure!(summary, output, **payload)
+    Card.create!(
+      source: source,
+      parent_card: self,
+      card_type: "generic",
+      project: project,
+      summary: summary.truncate(200),
+      ask: "review",
+      payload: self.payload.slice("session_id", "cwd", "thread_id").merge(payload.stringify_keys).merge("body" => output.to_s.last(4000))
+    )
+  end
+
   # Template interpolation for stamps and successors: {{project}}, {{summary}}, ...
   def interpolate(text)
     text.to_s.gsub(/\{\{\s*(\w+)\s*\}\}/) do

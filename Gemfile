@@ -60,3 +60,6 @@ group :test do
 end
 
 gem "anthropic", "~> 1.74"
+
+gem "google-apis-gmail_v1", "~> 0.53.0"
+gem "googleauth", "~> 1.17"

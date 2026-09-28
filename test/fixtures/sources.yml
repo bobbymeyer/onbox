@@ -9,3 +9,10 @@ printer:
   kind: generic
   card_type: generic
   token: printer-test-token
+
+gmail:
+  name: gmail
+  kind: email
+  card_type: email
+  token: gmail-test-token
+  settings: {}

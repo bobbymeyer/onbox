@@ -20,7 +20,9 @@ Rails.application.routes.draw do
   # Maintenance mode: the whole stack, and the machine behind it.
   get "stack" => "maintenance#show", as: :maintenance
   resources :stamps, except: :show
-  resources :sources, only: [ :index, :create, :destroy ]
+  resources :sources, only: [ :index, :create, :update, :destroy ] do
+    post :poll, on: :member
+  end
 
   get "up" => "rails/health#show", as: :rails_health_check
 end

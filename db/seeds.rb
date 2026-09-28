@@ -21,6 +21,12 @@ Stamp.find_or_create_by!(label: "Keep going", card_type: "agent") do |s|
   s.template = "Looks right. Keep going."
 end
 
+Source.find_or_create_by!(name: "gmail") { |s| s.kind = "email" }
+
+Stamp.find_or_create_by!(label: "Archive", card_type: "email") do |s|
+  s.action = { "kind" => "archive" }
+end
+
 Stamp.find_or_create_by!(label: "Done", card_type: "any") do |s|
   s.action = { "kind" => "handle" }
 end

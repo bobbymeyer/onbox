@@ -6,25 +6,14 @@ class AgentDispatchJob < ApplicationJob
 
   def perform(card, instruction)
     session_id = card.payload["session_id"]
-    if session_id.blank?
-      return report_failure(card, instruction, "Card has no session_id to send to.")
-    end
+    return report(card, instruction, "Card has no session_id to send to.") if session_id.blank?
 
     output, ok = AgentDispatch.call(session_id: session_id, instruction: instruction, cwd: card.payload["cwd"])
-    report_failure(card, instruction, output) unless ok
+    report(card, instruction, output) unless ok
   end
 
   private
-    def report_failure(card, instruction, output)
-      Card.create!(
-        source: card.source,
-        parent_card: card,
-        card_type: "generic",
-        project: card.project,
-        summary: "Couldn't send instruction to #{card.project.presence || "agent"}",
-        ask: "review",
-        proposed_action: nil,
-        payload: card.payload.slice("session_id", "cwd").merge("instruction" => instruction, "body" => output.to_s.last(4000))
-      )
+    def report(card, instruction, output)
+      card.report_failure!("Couldn't send instruction to #{card.project.presence || "agent"}", output, instruction: instruction)
     end
 end

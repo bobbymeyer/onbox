@@ -32,3 +32,9 @@ force_push:
   template: Force push it.
   requires_flip: true
   successors: []
+
+archive:
+  label: Archive
+  card_type: email
+  action: { "kind": "archive" }
+  successors: []

@@ -16,3 +16,6 @@ production:
   fire_due_triggers:
     class: FireTriggersJob
     schedule: every minute
+  poll_gmail:
+    class: GmailPollJob
+    schedule: every 2 minutes
