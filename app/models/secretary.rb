@@ -3,9 +3,6 @@
 # Every duty degrades to the intake's own front (or the deterministic
 # deferral parser) when the model is unavailable or declines.
 class Secretary
-  MODEL = ENV.fetch("STACK_SECRETARY_MODEL", "claude-opus-5-5")
-  BETAS = [ "server-side-fallback-2026-07-01" ].freeze
-
   DIGEST_SYSTEM = <<~PROMPT.freeze
     You are the secretary for The Stack, a single-user queue of index cards.
     Bobby manages loose teams of AI agents and standing processes. His attention
@@ -135,25 +132,9 @@ class Secretary
     end
 
     def structured(system:, user:, schema:)
-      message = client.beta.messages.create(
-        model: MODEL,
-        max_tokens: 16_000,
-        system_: system,
-        messages: [ { role: "user", content: user } ],
-        output_config: { effort: :low, format: { type: :json_schema, schema: schema } },
-        fallbacks: :default,
-        betas: BETAS
-      )
-      return if message.stop_reason == :refusal
-
-      text = message.content.select { |b| b.type == :text }.map(&:text).join
-      JSON.parse(text)
-    rescue Anthropic::Errors::Error, JSON::ParserError => e
+      Llm.extract(instructions: system, input: user, schema: schema)
+    rescue Llm::Error => e
       Rails.logger.warn("[secretary] #{e.class}: #{e.message}")
       nil
-    end
-
-    def client
-      @client ||= Anthropic::Client.new
     end
 end

@@ -52,9 +52,9 @@ home screen for full screen.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | — | Secretary's credentials. Without them, cards keep the intake's plain front |
+| `STACK_SECRETARY_URL` | `https://chat.bobbymeyer.com/v1` | OpenAI-compatible endpoint the secretary generates against. Needs `/v1/chat/completions` with a `json_schema` response format |
+| `STACK_SECRETARY_MODEL` | — | A model id from that endpoint's `/v1/models`. Unset means no secretary: cards keep the intake's plain front |
 | `STACK_SECRETARY` | on | `off` disables the LLM entirely |
-| `STACK_SECRETARY_MODEL` | `claude-opus-5-5` | Model for digests and deferrals |
 | `STACK_TIME_ZONE` | `UTC` | Where "tonight" and "tomorrow" resolve. Set this, e.g. `Pacific Time (US & Canada)` |
 | `STACK_AGENT_COMMAND` | `claude --resume {session_id} -p {instruction}` | How an instruction reaches a session. `{session_id}`, `{instruction}`, `{cwd}` are substituted per argument (no shell). Runs in the session's cwd |
 | `STACK_PASSWORD` / `STACK_USER` | unset / `bobby` | Optional HTTP basic auth on the views. Tailscale is the main perimeter |
