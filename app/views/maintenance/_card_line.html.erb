@@ -1,8 +1,16 @@
-<div class="card-meta">
-  <span class="card-source"><%= card.source&.name || "stack" %></span>
-  <% if card.project.present? %><span class="card-project"><%= card.project %></span><% end %>
-  <span class="card-ask ask-<%= card.ask %>"><%= ask_label(card) %></span>
-  <time class="card-age <%= "stale" if stale?(card) %>"><%= card_age(card) %></time>
+<% selectable = local_assigns.fetch(:selectable, true) %>
+<div class="card-line">
+  <% if selectable %>
+    <input type="checkbox" name="card_ids[]" value="<%= card.id %>" form="bulk-form" class="select-card" aria-label="Select <%= card.summary %>">
+  <% end %>
+  <div class="card-line-body">
+    <div class="card-meta">
+      <span class="card-source"><%= card.source&.name || "stack" %></span>
+      <% if card.project.present? %><span class="card-project"><%= card.project %></span><% end %>
+      <span class="card-ask ask-<%= card.ask %>"><%= ask_label(card) %></span>
+      <time class="card-age <%= "stale" if stale?(card) %>"><%= card_age(card) %></time>
+    </div>
+    <p class="maint-summary"><%= card.summary %></p>
+    <% if card.blocked? %><p class="hint">Waits on: <%= card.blocked_by.summary %></p><% end %>
+  </div>
 </div>
-<p class="maint-summary"><%= card.summary %></p>
-<% if card.blocked? %><p class="hint">Waits on: <%= card.blocked_by.summary %></p><% end %>

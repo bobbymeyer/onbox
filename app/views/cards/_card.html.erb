@@ -14,22 +14,21 @@
   </header>
 
   <section class="card-action">
-    <% if stamps.shown.any? %>
-      <div class="stamp-tray">
-        <% stamps.shown.each do |stamp| %>
-          <%= render "cards/stamp", card: card, stamp: stamp %>
-        <% end %>
-      </div>
-      <% if stamps.more.any? %>
-        <details class="more-stamps">
-          <summary>More stamps</summary>
-          <div class="stamp-tray">
-            <% stamps.more.each do |stamp| %>
-              <%= render "cards/stamp", card: card, stamp: stamp %>
-            <% end %>
-          </div>
-        </details>
+    <div class="stamp-tray">
+      <% stamps.shown.each do |stamp| %>
+        <%= render "cards/stamp", card: card, stamp: stamp %>
       <% end %>
+      <%= link_to "Decompose", breakdown_card_path(card), class: "stamp stamp-link" %>
+    </div>
+    <% if stamps.more.any? %>
+      <details class="more-stamps">
+        <summary>More stamps</summary>
+        <div class="stamp-tray">
+          <% stamps.more.each do |stamp| %>
+            <%= render "cards/stamp", card: card, stamp: stamp %>
+          <% end %>
+        </div>
+      </details>
     <% end %>
 
     <%= render "cards/types/#{card.type.name}", card: card %>

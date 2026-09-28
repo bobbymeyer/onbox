@@ -53,6 +53,24 @@ class Card < ApplicationRecord
     triggers.pending.order(:fires_at).first
   end
 
+  # Maintenance: shift one place toward the front (:forward) or back (:back)
+  # among the live cards, renumbering them to keep positions distinct.
+  def move!(direction)
+    order = Card.live.in_stack_order.to_a
+    index = order.index(self) or return
+    other = direction.to_s == "forward" ? index - 1 : index + 1
+    return if other.negative? || other >= order.size
+
+    order[index], order[other] = order[other], order[index]
+    base = order.map(&:position).min
+    transaction { order.each_with_index { |card, i| card.update_column(:position, base + i) } }
+    Card.broadcast_stack_refresh
+  end
+
+  def self.broadcast_stack_refresh
+    Turbo::StreamsChannel.broadcast_refresh_to("stack")
+  end
+
   # "Not this one": back onto the top, to fall again behind everything below it.
   def to_top_of_stack!
     update!(position: Card.top_position)
@@ -111,6 +129,6 @@ class Card < ApplicationRecord
 
   private
     def land_on_top
-      self.position = Card.top_position if position.to_i.zero?
+      self.position = Card.top_position if position.nil?
     end
 end

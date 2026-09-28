@@ -32,7 +32,30 @@ class CardsController < ApplicationController
     head :no_content
   end
 
+  # Decompose: the secretary proposes steps; Bobby edits them before any exist.
+  def breakdown
+    proposed = Secretary::Decomposition.propose(@card)
+    blank = { "summary" => "", "ask" => "acknowledge", "proposed_action" => "" }
+    @steps = proposed + [ blank ] * [ 5 - proposed.size, 2 ].max
+    @proposed = proposed.any?
+  end
+
+  def decompose
+    steps = params.fetch(:steps, {}).values.map { |step| step.permit(:summary, :ask, :proposed_action).to_h }
+    subs = Gestures.decompose(@card, steps)
+    if subs.empty?
+      redirect_to breakdown_card_path(@card), alert: "Write at least one step"
+    else
+      advance "Broke it into #{helpers.pluralize(subs.size, "card")}"
+    end
+  end
+
   # Maintenance gestures
+
+  def move
+    @card.move!(params[:direction])
+    redirect_back_or_to maintenance_path, status: :see_other
+  end
 
   def release
     @card.handlings.create!(verb: "release")

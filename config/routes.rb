@@ -14,11 +14,17 @@ Rails.application.routes.draw do
       post :flip
       post :release
       post :bottom
+      post :move
+      get :breakdown
+      post :decompose
     end
   end
 
   # Maintenance mode: the whole stack, and the machine behind it.
   get "stack" => "maintenance#show", as: :maintenance
+  post "stack/bulk" => "maintenance#bulk", as: :bulk_cards
+  post "stack/secretary" => "maintenance#converse", as: :secretary_conversation
+  resources :directives, only: [ :create, :destroy ]
   resources :stamps, except: :show
   resources :sources, only: [ :index, :create, :update, :destroy ] do
     post :poll, on: :member

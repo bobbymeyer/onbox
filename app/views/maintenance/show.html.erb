@@ -1,5 +1,4 @@
 <% content_for :title, "Stack · maintenance" %>
-<%= turbo_stream_from "stack" %>
 
 <main class="maintenance-view">
   <nav class="maint-nav">
@@ -16,20 +15,60 @@
     </p>
   </header>
 
+  <section id="secretary" class="secretary">
+    <h2>Secretary</h2>
+    <% if @messages.any? %>
+      <ol class="conversation">
+        <% @messages.each do |message| %>
+          <li class="message message-<%= message.role %>">
+            <%= simple_format message.body %>
+            <% if message.operations.any? %>
+              <ul class="operations">
+                <% message.operations.each do |op| %><li><%= op %></li><% end %>
+              </ul>
+            <% end %>
+          </li>
+        <% end %>
+      </ol>
+    <% end %>
+    <%= form_with url: secretary_conversation_path, class: "stack-form converse" do |f| %>
+      <%= f.text_area :text, rows: 2, placeholder: "Why is this so high? Always defer receipts till evening.", aria: { label: "Talk to the secretary" } %>
+      <%= f.submit "Ask" %>
+    <% end %>
+
+    <details class="directives" <%= "open" if @directives.any? %>>
+      <summary>Standing instructions (<%= @directives.size %>)</summary>
+      <ul class="maint-list">
+        <% @directives.each do |directive| %>
+          <li class="directive">
+            <span><%= directive.text %></span>
+            <%= button_to "×", directive_path(directive), method: :delete, class: "icon-button", aria: { label: "Drop instruction" } %>
+          </li>
+        <% end %>
+      </ul>
+      <%= form_with model: Directive.new, class: "stack-form inline-form" do |f| %>
+        <%= f.text_field :text, placeholder: "Hold newsletters until Saturday morning", aria: { label: "New standing instruction" } %>
+        <%= f.submit "Add" %>
+      <% end %>
+    </details>
+  </section>
+
   <section>
     <h2>Live <span class="hint">front of the stack first</span></h2>
     <% if @live.empty? %>
       <p class="hint">Empty.</p>
     <% end %>
     <ol class="maint-list">
-      <% @live.each do |card| %>
+      <% @live.each_with_index do |card, i| %>
         <li class="maint-card <%= "is-blocked" if card.blocked? %>">
           <%= render "maintenance/card_line", card: card %>
           <div class="maint-actions">
+            <%= button_to "↑", move_card_path(card, direction: "forward"), disabled: i.zero?, aria: { label: "Move toward the front" } %>
+            <%= button_to "↓", move_card_path(card, direction: "back"), disabled: i == @live.size - 1, aria: { label: "Move back" } %>
             <%= button_to "To front", bottom_card_path(card) %>
             <%= button_to "To top", top_card_path(card, return_to: "stack") %>
+            <%= link_to "Decompose", breakdown_card_path(card) %>
             <%= link_to "Edit", edit_card_path(card) %>
-            <%= button_to "Delete", card_path(card), method: :delete, class: "danger", data: { turbo_confirm: "Delete this card?" } %>
           </div>
         </li>
       <% end %>
@@ -49,7 +88,6 @@
           <div class="maint-actions">
             <%= button_to "Release", release_card_path(card) %>
             <%= link_to "Edit", edit_card_path(card) %>
-            <%= button_to "Delete", card_path(card), method: :delete, class: "danger", data: { turbo_confirm: "Delete this card?" } %>
           </div>
         </li>
       <% end %>
@@ -64,10 +102,21 @@
     <ul class="maint-list">
       <% @recent.each do |card| %>
         <li class="maint-card is-handled">
-          <%= render "maintenance/card_line", card: card %>
+          <%= render "maintenance/card_line", card: card, selectable: false %>
           <p class="hint"><%= card.handled_with %> · <%= time_ago_in_words(card.handled_at) %> ago<% if card.flip_count > 0 %> · flipped<% end %></p>
         </li>
       <% end %>
     </ul>
   </section>
+
+  <% if @live.any? || @held.any? %>
+    <%= form_with url: bulk_cards_path, id: "bulk-form", class: "bulk-bar", data: { controller: "bulk", action: "submit->bulk#confirm" } do |f| %>
+      <%= f.select :bulk_op, [
+            [ "With selected…", "" ], [ "Later…", "later" ], [ "To front", "front" ], [ "To top", "top" ],
+            [ "Re-tag project…", "project" ], [ "Release", "release" ], [ "Done", "done" ], [ "Delete", "delete" ]
+          ], {}, aria: { label: "Bulk action" } %>
+      <%= f.text_field :value, placeholder: "when / project", aria: { label: "Value" } %>
+      <%= f.submit "Apply" %>
+    <% end %>
+  <% end %>
 </main>

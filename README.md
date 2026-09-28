@@ -17,7 +17,7 @@ Rails 8, omakase: SQLite, Solid Queue / Cache / Cable, Hotwire, importmap, Props
 | 5. Stamps: table, tray, PR-and-merge first | Done, with successors and repeats |
 | 6. Top-of-stack and later, with time triggers | Done, plus event triggers |
 | 7. Email as the second source and card type | Done: Gmail API polling, reply in thread, archive |
-| 8. Maintenance view, decompose, noticer | Basic maintenance view only; no decompose or noticer yet |
+| 8. Maintenance view, decompose, noticer | Maintenance view and decompose done; noticer not started |
 
 ## The model
 
@@ -36,6 +36,28 @@ Rails 8, omakase: SQLite, Solid Queue / Cache / Cable, Hotwire, importmap, Props
 - **CardType** (`app/models/card_type.rb`): each type knows its inline tool
   (`app/views/cards/types/_<name>.html.erb`) and how to deliver a reply. Add a
   source by adding a card type.
+
+## Maintenance mode (`/stack`)
+
+The whole stack, front first. Per card: move up or down, to front, to top,
+decompose, edit. Tick cards for bulk actions from the bar at the bottom: later
+(one time for all), to front (keeping their order), to top, re-tag project,
+release, done, delete (asks first).
+
+**Talk to the secretary.** Ask why something sits where it does, or tell it
+to change things. It can move, hold, release and re-tag cards, and save or drop
+standing instructions; it cannot delete, handle or send anything, and every
+change it makes is listed under its reply. **Standing instructions** ("Hold
+receipts until 18:00") go into every digest, which can now also put a new card
+straight to the front or hold it.
+
+**Decompose** (on every card, and from the list) breaks a card into
+single-action cards. The secretary drafts the steps (a clarifying question
+first when the card is vague) and you edit them before anything is created.
+Each step waits on the one before it; the first goes to the front and the rest
+land on top and fall, so steps spread through the stack by dependency. Steps
+keep the original card's type and context, so an agent step's instruction still
+goes to that session.
 
 ## Running it on the Mac Studio
 
@@ -152,8 +174,10 @@ held on `<source>:<event>`). Senders that can't set headers can pass `?token=`.
   same `Gmail::Sync`.
 - Sending a reply is one tap. If that proves too easy for an irreversible
   action, the per-stamp `requires_flip` flag is the lever.
-- Not built yet: decompose, the noticer, the secretary reordering the stack,
-  the secretary's periodic accounting, and calendar.
+- The secretary only places a card when it arrives (or when asked); it doesn't
+  yet re-judge the whole order as things change.
+- Not built yet: the noticer, the secretary's periodic accounting, noticing
+  when grooming time outruns handling time, and calendar.
 
 ## Tests
 

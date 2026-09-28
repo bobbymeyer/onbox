@@ -1,0 +1,24 @@
+<% content_for :title, "Decompose" %>
+<main class="maintenance-view">
+  <nav class="maint-nav"><%= link_to "← Back", root_path %></nav>
+  <h1>Decompose</h1>
+  <p class="maint-summary"><%= @card.summary %></p>
+  <p class="hint">
+    One action per card, in order. Each waits on the one before it; the first goes to the front.
+    <%= @proposed ? "The secretary drafted these; edit freely." : "Blank rows are skipped." %>
+  </p>
+
+  <%= form_with url: decompose_card_path(@card), class: "stack-form steps" do |f| %>
+    <% @steps.each_with_index do |step, i| %>
+      <fieldset class="step">
+        <legend><%= i + 1 %></legend>
+        <%= text_field_tag "steps[#{i}][summary]", step["summary"], placeholder: i.zero? ? "First thing to do (or the question to answer)" : "Then…", aria: { label: "Step #{i + 1}" } %>
+        <div class="step-detail">
+          <%= select_tag "steps[#{i}][ask]", options_for_select(Card::ASKS, step["ask"]), aria: { label: "Ask for step #{i + 1}" } %>
+          <%= text_field_tag "steps[#{i}][proposed_action]", step["proposed_action"], placeholder: @card.type.tool_placeholder, aria: { label: "Proposed action for step #{i + 1}" } %>
+        </div>
+      </fieldset>
+    <% end %>
+    <%= f.submit "Break it down" %>
+  <% end %>
+</main>

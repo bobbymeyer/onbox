@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_28_215104) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_28_220411) do
   create_table "cards", force: :cascade do |t|
     t.integer "source_id"
     t.string "key"
@@ -21,7 +21,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_28_215104) do
     t.text "proposed_action"
     t.json "payload", default: {}, null: false
     t.string "state", default: "live", null: false
-    t.integer "position", default: 0, null: false
+    t.integer "position", null: false
     t.datetime "hold_until"
     t.string "hold_event"
     t.integer "parent_card_id"
@@ -39,6 +39,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_28_215104) do
     t.index ["state", "position"], name: "index_cards_on_state_and_position"
   end
 
+  create_table "directives", force: :cascade do |t|
+    t.text "text", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
   create_table "handlings", force: :cascade do |t|
     t.integer "card_id", null: false
     t.integer "stamp_id"
@@ -49,6 +55,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_28_215104) do
     t.index ["card_id"], name: "index_handlings_on_card_id"
     t.index ["stamp_id"], name: "index_handlings_on_stamp_id"
     t.index ["verb"], name: "index_handlings_on_verb"
+  end
+
+  create_table "secretary_messages", force: :cascade do |t|
+    t.string "role", null: false
+    t.text "body", null: false
+    t.json "operations", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
   end
 
   create_table "sources", force: :cascade do |t|

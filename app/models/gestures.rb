@@ -49,6 +49,42 @@ module Gestures
     true
   end
 
+  # Break one overcomposed or poorly defined card into single-action cards.
+  # Each step waits on the one before it. The first goes to the front, since
+  # Bobby was on this card; the rest land on top and fall like new cards, so
+  # the steps scatter through the stack by dependency rather than as a block.
+  # Steps keep the original's type and context, so an agent step can still be
+  # sent to its session.
+  #
+  # steps: [{ "summary" =>, "ask" =>, "proposed_action" => }]
+  def decompose(card, steps)
+    steps = steps.map(&:to_h).select { |step| step["summary"].present? }
+    return [] if steps.empty?
+
+    Card.transaction do
+      front = Card.bottom_position
+      previous = nil
+      subs = steps.each_with_index.map do |step, i|
+        previous = Card.create!(
+          source: card.source,
+          parent_card: card,
+          blocked_by: previous,
+          position: i.zero? ? front : nil,
+          card_type: card.card_type,
+          project: card.project,
+          summary: step["summary"].to_s.strip.truncate(200),
+          ask: Card::ASKS.include?(step["ask"]) ? step["ask"] : "acknowledge",
+          proposed_action: step["proposed_action"].to_s.strip.presence,
+          payload: card.payload.except("likely_stamps").merge("decomposed_from" => card.id),
+          digested_at: Time.current
+        )
+      end
+      card.handlings.create!(verb: "decompose", text: subs.map(&:summary).join("\n"))
+      card.handle!(with: "decompose")
+      subs
+    end
+  end
+
   # Flip rate is a health metric for the intake side.
   def flip(card)
     card.handlings.create!(verb: "flip")

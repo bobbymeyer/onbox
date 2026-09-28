@@ -26,6 +26,14 @@ class Secretary
     - likely_stamps: up to three labels from the available stamps that best fit
       this card, most likely first. Only use labels from the list given.
 
+    - placement: where the card goes. "normal" lets it fall like any new card.
+      "front" puts it in front of Bobby now; only for something plainly urgent or
+      a standing instruction that says so. "hold" keeps it out of the stack until
+      hold_until; only when a standing instruction calls for it.
+    - hold_until: ISO 8601 time with offset when placement is "hold", else "".
+
+    Bobby's standing instructions, when given, override your defaults.
+
     A confident wrong front is worse than a plain one. If the event is unclear,
     say so in the summary and choose "review".
   PROMPT
@@ -37,9 +45,11 @@ class Secretary
       summary: { type: "string" },
       ask: { type: "string", enum: Card::ASKS },
       proposed_action: { type: "string" },
-      likely_stamps: { type: "array", items: { type: "string" } }
+      likely_stamps: { type: "array", items: { type: "string" } },
+      placement: { type: "string", enum: %w[normal front hold] },
+      hold_until: { type: "string" }
     },
-    required: %w[project summary ask proposed_action likely_stamps],
+    required: %w[project summary ask proposed_action likely_stamps placement hold_until],
     additionalProperties: false
   }.freeze
 
@@ -77,10 +87,23 @@ class Secretary
         payload: card.payload.merge("likely_stamps" => Array(front["likely_stamps"]) & stamp_labels),
         digested_at: Time.current
       )
+      place(card, front)
     else
       card.update!(digested_at: Time.current)
     end
     card
+  end
+
+  # The digest's placement: to the front, or held per a standing instruction.
+  def place(card, front)
+    return unless card.live?
+    case front["placement"]
+    when "front"
+      card.update!(position: Card.bottom_position)
+    when "hold"
+      time = Time.zone.parse(front["hold_until"].to_s) rescue nil
+      card.hold!(until_time: time) if time&.future?
+    end
   end
 
   # Returns { until_time:, event_key: } or nil when it cannot be resolved.
@@ -106,6 +129,25 @@ class Secretary
     nil
   end
 
+  def structured(system:, user:, schema:, effort: :low)
+    message = client.beta.messages.create(
+      model: MODEL,
+      max_tokens: 16_000,
+      system_: system,
+      messages: [ { role: "user", content: user } ],
+      output_config: { effort: effort, format: { type: :json_schema, schema: schema } },
+      fallbacks: :default,
+      betas: BETAS
+    )
+    return if message.stop_reason == :refusal
+
+    text = message.content.select { |b| b.type == :text }.map(&:text).join
+    JSON.parse(text)
+  rescue Anthropic::Errors::Error, JSON::ParserError => e
+    Rails.logger.warn("[secretary] #{e.class}: #{e.message}")
+    nil
+  end
+
   private
     def ask_for_front(card)
       stamps = Stamp.for_card(card).by_use.pluck(:label)
@@ -113,6 +155,8 @@ class Secretary
       structured(
         system: DIGEST_SYSTEM,
         user: <<~EVENT,
+          Now: #{Time.current.iso8601} (#{Time.zone.name})
+          Standing instructions: #{Directive.texts.presence&.join("; ") || "none"}
           Card type: #{card.card_type}
           Source: #{source&.name} (#{source&.kind})
           Intake's draft front: #{{ project: card.project, summary: card.summary, ask: card.ask }.to_json}
@@ -132,25 +176,6 @@ class Secretary
         keys << "#{card.source.name}:from:#{address.downcase}"
       end
       keys
-    end
-
-    def structured(system:, user:, schema:)
-      message = client.beta.messages.create(
-        model: MODEL,
-        max_tokens: 16_000,
-        system_: system,
-        messages: [ { role: "user", content: user } ],
-        output_config: { effort: :low, format: { type: :json_schema, schema: schema } },
-        fallbacks: :default,
-        betas: BETAS
-      )
-      return if message.stop_reason == :refusal
-
-      text = message.content.select { |b| b.type == :text }.map(&:text).join
-      JSON.parse(text)
-    rescue Anthropic::Errors::Error, JSON::ParserError => e
-      Rails.logger.warn("[secretary] #{e.class}: #{e.message}")
-      nil
     end
 
     def client
