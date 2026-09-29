@@ -83,18 +83,22 @@ closed (calendar boundaries in `STACK_TIME_ZONE`, weeks from Monday). Each
 longer one is built from the shorter ones inside it plus the log, so a weekly
 reads its dailies rather than a week of raw events. The secretary's own moves
 (placements on arrival, changes asked for in maintenance) are logged, so they
-show up here. A quiet hour writes nothing and costs no API call; longer
-periods still report while cards are waiting. Without API access the digest
-is the plain numbers.
+show up here. Without API access the digest is the plain numbers.
+
+**No activity, no report.** A period gets a digest only if you worked cards in
+it (stamped, replied, deferred, flipped, decomposed...). Cards arriving and the
+secretary's own moves don't count, so an idle hour, day or week writes nothing
+and costs no API call.
 
 Hourly digests stay on `/digests`. Daily, weekly and monthly ones also become a
-card to read and acknowledge; one written overnight is held until 08:00. The
-secretary also reads its latest digests when you talk to it.
+card to read and acknowledge. If you've touched a card in the last 30 minutes it
+lands right away, however late; otherwise it waits and drops in after your next
+gesture. The secretary also reads its latest digests when you talk to it.
 
 | Variable | Default | |
 |---|---|---|
 | `STACK_DIGEST_CARDS` | `daily,weekly,monthly` | Which periods become cards |
-| `STACK_DIGEST_HOUR` | `8` | When overnight digest cards are released |
+| `STACK_ACTIVE_MINUTES` | `30` | How recently you must have worked a card to count as still working |
 
 **Catch up now** on `/digests` (or `bin/rails stack:digest`) writes anything due.
 Each run writes only the latest missed window per period, so the very first

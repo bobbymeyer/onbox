@@ -13,6 +13,7 @@ module Ledger
     oldest = live.order(:created_at).first
 
     {
+      "gestures" => handlings.by_bobby.count,
       "arrived" => arrived.group("COALESCE(sources.name, 'stack')").count,
       "handled_count" => handled.count,
       "handled" => handled.group(:handled_with).order(Arel.sql("COUNT(*) DESC")).limit(6).count,
@@ -28,9 +29,8 @@ module Ledger
     }
   end
 
-  # Anything happened at all in the window.
+  # Bobby worked cards in the window. No activity, no report.
   def active?(stats)
-    stats["arrived"].any? || stats["handled_count"].positive? || stats["secretary"].any? ||
-      stats["flips"].positive? || stats["decomposed"].positive? || stats["deferred"].any?
+    stats["gestures"].positive?
   end
 end

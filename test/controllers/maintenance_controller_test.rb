@@ -81,8 +81,8 @@ end
 
 class DigestsControllerTest < ActionDispatch::IntegrationTest
   test "lists digests and catches up" do
-    Card.create!(summary: "Waiting")
-    travel_to(2.days.from_now) do
+    Gestures.stamp(Card.create!(summary: "Waiting"), stamps(:done))
+    travel_to(1.day.from_now) do
       post catch_up_digests_url
       follow_redirect!
       assert_select ".flash-notice", /Wrote/

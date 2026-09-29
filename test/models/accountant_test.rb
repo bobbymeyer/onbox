@@ -13,12 +13,16 @@ class AccountantTest < ActiveSupport::TestCase
     assert_equal [ Time.zone.local(2026, 8, 1), Time.zone.local(2026, 9, 1) ], Accounting.window("monthly", NOW)
   end
 
-  test "an hour with activity gets a digest from the log; a quiet one is skipped" do
-    travel_to(NOW.change(hour: 9, min: 30)) do
-      card = Card.create!(summary: "Print finished", source: sources(:printer))
-      Gestures.flip(card)
+  def work_a_card(at, summary: "Print finished")
+    travel_to(at) do
+      card = Card.create!(summary: summary, source: sources(:printer))
       Gestures.stamp(card, stamps(:done))
+      card
     end
+  end
+
+  test "an hour Bobby worked gets a digest; an hour he didn't gets none" do
+    work_a_card(NOW.change(hour: 9, min: 30))
 
     travel_to(NOW) do
       hourly = Accountant.account("hourly", NOW)
@@ -26,10 +30,21 @@ class AccountantTest < ActiveSupport::TestCase
       assert_equal({ "printer" => 1 }, hourly.stats["arrived"])
       assert_match "Handled 1 (1 Done)", hourly.body
       assert_nil hourly.card, "hourly digests stay off the stack"
-
       assert_nil Accountant.account("hourly", NOW), "written once"
-      assert_nil Accountant.account("hourly", NOW + 1.hour), "quiet hour skipped"
     end
+  end
+
+  test "arrivals and the secretary's own moves alone don't make a report" do
+    travel_to(NOW.change(hour: 9, min: 10)) do
+      card = Card.create!(summary: "Receipt from Stripe", source: sources(:printer))
+      Secretary.new.place(card, "placement" => "hold", "hold_until" => NOW.change(hour: 18).iso8601)
+    end
+    travel_to(NOW) { assert_nil Accountant.account("hourly", NOW) }
+  end
+
+  test "an inactive day gets no report, even with cards waiting" do
+    travel_to(NOW - 3.days) { Card.create!(summary: "Old thing") }
+    travel_to(NOW) { assert_empty Accountant.run(NOW) }
   end
 
   test "the secretary's own actions are accounted for" do
@@ -37,36 +52,48 @@ class AccountantTest < ActiveSupport::TestCase
       card = Card.create!(summary: "Receipt from Stripe")
       Secretary.new.place(card, "placement" => "hold", "hold_until" => NOW.change(hour: 18).iso8601)
     end
+    work_a_card(NOW.change(hour: 9, min: 20))
     hourly = travel_to(NOW) { Accountant.account("hourly", NOW) }
     assert_match(/Held on arrival until .*: Receipt from Stripe/, hourly.stats["secretary"].sole)
     assert_match "Receipt from Stripe", hourly.stats["held_now"].sole
   end
 
-  test "daily digests roll up the hours and become a card held until morning" do
+  test "daily digests roll up the hours" do
     day = Time.zone.local(2026, 9, 28)
+    work_a_card(day + 9.hours + 30.minutes)
     Accounting.create!(period: "hourly", starts_at: day + 9.hours, ends_at: day + 10.hours, body: "Quiet morning.")
     Accounting.create!(period: "hourly", starts_at: day - 1.hour, ends_at: day, body: "Yesterday, not today.")
 
-    just_after_midnight = Time.zone.local(2026, 9, 29, 0, 2)
-    daily = travel_to(just_after_midnight) { Accountant.account("daily", just_after_midnight) }
-
+    daily = travel_to(NOW) { Accountant.account("daily", NOW) }
     assert_equal [ "Quiet morning." ], Accounting.within("daily", daily.starts_at, daily.ends_at).map(&:body)
-    card = daily.card
-    assert_equal [ "digest", "acknowledge" ], [ card.card_type, card.ask ]
-    assert card.held?
-    assert_equal Time.zone.local(2026, 9, 29, 8), card.hold_until
+    assert_equal [ "digest", "acknowledge" ], daily.card.values_at(:card_type, :ask)
   end
 
-  test "longer periods report while cards wait, even with nothing new" do
-    travel_to(NOW - 3.days) { Card.create!(summary: "Old thing") }
-    daily = travel_to(NOW) { Accountant.account("daily", NOW) }
-    assert_equal 1, daily.stats["stale_now"]
-    assert_match "oldest: Old thing", daily.body
-    assert daily.card.live?, "delivered by day, not held"
+  test "done for the night: the digest waits for Bobby's next gesture" do
+    work_a_card(Time.zone.local(2026, 9, 28, 21, 0))
+    midnight = Time.zone.local(2026, 9, 29, 0, 2)
+    card = travel_to(midnight) { Accountant.account("daily", midnight) }.card
+    assert card.held?
+    assert_nil Card.current
+
+    travel_to(Time.zone.local(2026, 9, 29, 7, 45)) do
+      morning = Card.create!(summary: "First email")
+      assert_equal morning, Card.current
+      Gestures.flip(morning)
+      assert card.reload.live?, "his first gesture brings it in"
+    end
+  end
+
+  test "still clocking cards: the digest lands now, however late" do
+    work_a_card(Time.zone.local(2026, 9, 28, 23, 50))
+    after_midnight = Time.zone.local(2026, 9, 29, 0, 2)
+    card = travel_to(after_midnight) { Accountant.account("daily", after_midnight) }.card
+    assert card.live?
   end
 
   test "run catches up each period's latest window, shortest first, once" do
-    travel_to(NOW - 3.days) { Card.create!(summary: "Old thing") }
+    work_a_card(Time.zone.local(2026, 9, 25, 15)) # in the week of 21 Sep
+    work_a_card(Time.zone.local(2026, 9, 30, 15)) # the last day of the month
     month_start = Time.zone.local(2026, 10, 1, 0, 2)
     written = travel_to(month_start) { Accountant.run(month_start) }
     assert_equal %w[daily weekly monthly], written.map(&:period)
@@ -85,8 +112,8 @@ class AccountantTest < ActiveSupport::TestCase
   end
 
   test "digest cards take no stamps and are read, then acknowledged" do
-    travel_to(NOW - 3.days) { Card.create!(summary: "Old thing") }
-    card = travel_to(NOW) { Accountant.account("daily", NOW) }.card
+    work_a_card(NOW - 3.hours)
+    card = travel_to(NOW) { Accountant.account("daily", NOW + 1.day) }.card
     assert_empty StampTray.for(card).shown
     Gestures.reply(card, "")
     assert card.reload.handled?

@@ -1,10 +1,9 @@
 # Writes the secretary's periodic accounting. Runs every hour and writes each
 # period whose window just closed: hourly, then daily, weekly and monthly,
-# each longer one built from the shorter ones inside it plus the log.
+# each longer one built from the shorter ones inside it plus the log. Only
+# periods in which Bobby worked cards get a report.
 module Accountant
   CARD_PERIODS = ENV.fetch("STACK_DIGEST_CARDS", "daily,weekly,monthly").split(",").map(&:strip).freeze
-  MORNING = ENV.fetch("STACK_DIGEST_HOUR", 8).to_i
-  EVENING = 22
 
   SYSTEM = <<~PROMPT.freeze
     You are the secretary for The Stack, Bobby's single-user queue of index
@@ -46,8 +45,9 @@ module Accountant
     return if Accounting.exists?(period: period, starts_at: starts)
 
     stats = Ledger.for(starts...ends)
+    return unless Ledger.active?(stats)
+
     children = Accounting.within(period, starts, ends).to_a
-    return if skip?(period, stats, children)
 
     written = write(period, starts, ends, stats, children)
     accounting = Accounting.create!(
@@ -58,12 +58,6 @@ module Accountant
     accounting
   rescue ActiveRecord::RecordNotUnique
     nil
-  end
-
-  # A quiet hour costs nothing. Longer periods still report while cards wait.
-  def skip?(period, stats, children)
-    return false if Ledger.active?(stats) || children.any?
-    period == "hourly" || stats["live_now"].zero?
   end
 
   def write(period, starts, ends, stats, children)
@@ -97,7 +91,8 @@ module Accountant
     lines.presence&.join("\n") || "Nothing happened and nothing is waiting."
   end
 
-  # Daily and longer digests become a card; overnight ones wait for the morning.
+  # Daily and longer digests become a card. If Bobby is working cards right
+  # now it lands now; otherwise it waits for his next gesture.
   def deliver(accounting, headline, now)
     card = Card.create!(
       card_type: "digest",
@@ -108,10 +103,7 @@ module Accountant
       digested_at: now
     )
     accounting.update!(card: card)
-    unless now.hour.between?(MORNING, EVENING - 1)
-      morning = now.change(hour: MORNING)
-      card.hold!(until_time: morning > now ? morning : morning + 1.day)
-    end
+    card.hold!(event_key: Handling::ACTIVE_EVENT) unless Handling.bobby_active?
     card
   end
 end
