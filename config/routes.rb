@@ -17,6 +17,7 @@ Rails.application.routes.draw do
       post :move
       get :breakdown
       post :decompose
+      post :cast
     end
   end
 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_28_220411) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_29_013256) do
   create_table "cards", force: :cascade do |t|
     t.integer "source_id"
     t.string "key"
@@ -55,6 +55,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_28_220411) do
     t.index ["card_id"], name: "index_handlings_on_card_id"
     t.index ["stamp_id"], name: "index_handlings_on_stamp_id"
     t.index ["verb"], name: "index_handlings_on_verb"
+  end
+
+  create_table "noticings", force: :cascade do |t|
+    t.string "card_type", null: false
+    t.string "phrase", null: false
+    t.text "example", null: false
+    t.integer "count", null: false
+    t.integer "card_id"
+    t.integer "stamp_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["card_id"], name: "index_noticings_on_card_id"
+    t.index ["card_type", "phrase"], name: "index_noticings_on_card_type_and_phrase", unique: true
+    t.index ["stamp_id"], name: "index_noticings_on_stamp_id"
   end
 
   create_table "secretary_messages", force: :cascade do |t|
@@ -109,5 +123,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_28_220411) do
   add_foreign_key "cards", "sources"
   add_foreign_key "handlings", "cards"
   add_foreign_key "handlings", "stamps"
+  add_foreign_key "noticings", "cards", on_delete: :nullify
+  add_foreign_key "noticings", "stamps", on_delete: :nullify
   add_foreign_key "triggers", "cards"
 end

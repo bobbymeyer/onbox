@@ -17,7 +17,7 @@ Rails 8, omakase: SQLite, Solid Queue / Cache / Cable, Hotwire, importmap, Props
 | 5. Stamps: table, tray, PR-and-merge first | Done, with successors and repeats |
 | 6. Top-of-stack and later, with time triggers | Done, plus event triggers |
 | 7. Email as the second source and card type | Done: Gmail API polling, reply in thread, archive |
-| 8. Maintenance view, decompose, noticer | Maintenance view and decompose done; noticer not started |
+| 8. Maintenance view, decompose, noticer | Done |
 
 ## The model
 
@@ -58,6 +58,18 @@ Each step waits on the one before it; the first goes to the front and the rest
 land on top and fall, so steps spread through the stack by dependency. Steps
 keep the original card's type and context, so an agent step's instruction still
 goes to that session.
+
+## The noticer
+
+It watches your free-text replies, per card type. When the same phrase
+comes up three times in 60 days (ignoring case, punctuation and "&" vs "and")
+and no stamp already covers it, an offer card lands in the stack: "You've
+typed "PR and merge" 3 times. Make it a stamp?" Its tool has the label and
+message pre-filled and editable. **Make it a stamp** casts a stamp that does
+what your reply did (an instruction on agent cards, a reply on email cards);
+**Not a stamp** declines, and a declined phrase is never offered again. Add
+successors to the new stamp on `/stamps`. The threshold is
+`STACK_NOTICER_THRESHOLD`.
 
 ## Running it on the Mac Studio
 
@@ -176,8 +188,10 @@ held on `<source>:<event>`). Senders that can't set headers can pass `?token=`.
   action, the per-stamp `requires_flip` flag is the lever.
 - The secretary only places a card when it arrives (or when asked); it doesn't
   yet re-judge the whole order as things change.
-- Not built yet: the noticer, the secretary's periodic accounting, noticing
-  when grooming time outruns handling time, and calendar.
+- The noticer matches phrases exactly after normalizing; it won't yet see
+  that "PR and merge" and "open a PR then merge" are the same request.
+- Not built yet: the secretary's periodic accounting, noticing when grooming
+  time outruns handling time, and calendar.
 
 ## Tests
 

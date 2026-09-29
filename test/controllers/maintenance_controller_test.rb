@@ -62,3 +62,19 @@ class MaintenanceControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to breakdown_card_url(b)
   end
 end
+
+class NoticerFlowTest < ActionDispatch::IntegrationTest
+  test "the offer card casts a stamp from the dispenser" do
+    3.times { |i| Gestures.reply(agent_card(session_id: "s#{i}"), "Ship it to staging") }
+    Noticer.call("agent")
+
+    get root_url
+    assert_select ".tool-stamp-offer input[name=label][value=?]", "Ship it to staging"
+    assert_select "a.stamp-link", false, "offers can't be decomposed"
+    assert_select "button.stamp", false, "offers take no stamps"
+
+    post cast_card_url(Card.current), params: { label: "Staging", template: "Ship it to staging" }
+    assert_redirected_to root_url
+    assert Stamp.exists?(label: "Staging", card_type: "agent")
+  end
+end

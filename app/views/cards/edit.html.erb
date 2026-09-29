@@ -11,7 +11,7 @@
     <%= f.label :ask %>
     <%= f.select :ask, Card::ASKS %>
     <%= f.label :card_type %>
-    <%= f.select :card_type, CardType::NAMES %>
+    <%= f.select :card_type, CardType::SOURCE_NAMES %>
     <%= f.label :proposed_action %>
     <%= f.text_area :proposed_action, rows: 4 %>
     <%= f.submit "Save" %>

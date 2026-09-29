@@ -28,6 +28,7 @@ module Gestures
       card.handle!(with: "reply")
     end
     card.type.perform("reply", card, text)
+    NoticerJob.perform_later(card.card_type) if text.present?
     card
   end
 
@@ -100,7 +101,7 @@ module Gestures
         source: card.source,
         parent_card: card,
         blocked_by: spec["parallel"] ? nil : previous,
-        card_type: CardType::NAMES.include?(spec["card_type"]) ? spec["card_type"] : "generic",
+        card_type: CardType::SOURCE_NAMES.include?(spec["card_type"]) ? spec["card_type"] : "generic",
         project: card.interpolate(spec["project"].presence || "{{project}}"),
         summary: card.interpolate(spec["summary"]).truncate(200),
         ask: Card::ASKS.include?(spec["ask"]) ? spec["ask"] : "acknowledge",

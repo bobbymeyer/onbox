@@ -50,6 +50,14 @@ class CardsController < ApplicationController
     end
   end
 
+  # Accept the noticer's offer: cast the repeated reply into a stamp.
+  def cast
+    stamp = Noticer.cast!(@card, label: params[:label], template: params[:template])
+    advance "New stamp: #{stamp.label}"
+  rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotFound => e
+    advance "Couldn't make that stamp: #{e.message}", alert: true
+  end
+
   # Maintenance gestures
 
   def move

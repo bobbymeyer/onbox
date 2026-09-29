@@ -11,7 +11,7 @@ class Stamp < ApplicationRecord
   has_many :handlings, dependent: :nullify
 
   validates :label, presence: true
-  validates :card_type, inclusion: { in: [ "any", *CardType::NAMES ] }
+  validates :card_type, inclusion: { in: [ "any", *CardType::SOURCE_NAMES ] }
   validate :action_kind_known
   validate :json_fields_parse
 

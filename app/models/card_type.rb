@@ -9,6 +9,10 @@ class CardType
     def tool_placeholder = "Anything to record before this leaves the thread"
     def send_label = "Handled"
     def requires_text? = false
+    def decomposable? = true
+
+    # What a stamp cast from Bobby's replies on this type does.
+    def primary_action = "handle"
 
     # Action kinds this type can carry out besides "handle".
     def actions = []
@@ -28,6 +32,7 @@ class CardType
     def send_label = "Send to agent"
     def requires_text? = true
     def actions = %w[instruct reply]
+    def primary_action = "instruct"
 
     def perform(kind, card, text)
       AgentDispatchJob.perform_later(card, text) if text.present? && actions.include?(kind)
@@ -41,6 +46,7 @@ class CardType
     def send_label = "Send reply"
     def requires_text? = true
     def actions = %w[reply instruct archive]
+    def primary_action = "reply"
 
     # "instruct" on an email means send the drafted reply, so "Approve" works here too.
     def perform(kind, card, text)
@@ -51,8 +57,19 @@ class CardType
     end
   end
 
-  REGISTRY = [ Agent.new, Email.new, Generic.new ].index_by(&:name).freeze
+  # The noticer's offer to turn a repeated reply into a stamp. Its tool casts
+  # the stamp (CardsController#cast); replying with nothing declines.
+  class StampOffer < Generic
+    def name = "stamp_offer"
+    def send_label = "Not a stamp"
+    def decomposable? = false
+    def supports?(_kind) = false
+  end
+
+  REGISTRY = [ Agent.new, Email.new, Generic.new, StampOffer.new ].index_by(&:name).freeze
   NAMES = REGISTRY.keys.freeze
+  # Types a source or stamp can be for; offers are the stack's own.
+  SOURCE_NAMES = (NAMES - [ "stamp_offer" ]).freeze
 
   SOURCE_KIND_DEFAULTS = { "claude_code" => "agent", "email" => "email" }.freeze
 

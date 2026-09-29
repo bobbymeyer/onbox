@@ -1,0 +1,13 @@
+<% noticed = card.payload["noticed"] || {} %>
+<%= form_with url: cast_card_path(card), class: "tool tool-stamp-offer" do |f| %>
+  <p class="hint">
+    A stamp for <%= noticed["card_type"] %> cards that does what your reply did, in one tap.
+    Edit it here; add successors later on the stamps page.
+  </p>
+  <%= f.label :label, "Stamp label", class: "tool-label" %>
+  <%= f.text_field :label, value: card.proposed_action.to_s.truncate(40), required: true %>
+  <%= f.label :template, "What it sends", class: "tool-label" %>
+  <%= f.text_area :template, value: card.proposed_action, rows: 3 %>
+  <%= f.submit "Make it a stamp", class: "tool-send" %>
+<% end %>
+<%= button_to card.type.send_label, reply_card_path(card), class: "defer-button decline" %>

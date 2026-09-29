@@ -18,7 +18,9 @@
       <% stamps.shown.each do |stamp| %>
         <%= render "cards/stamp", card: card, stamp: stamp %>
       <% end %>
-      <%= link_to "Decompose", breakdown_card_path(card), class: "stamp stamp-link" %>
+      <% if card.type.decomposable? %>
+        <%= link_to "Decompose", breakdown_card_path(card), class: "stamp stamp-link" %>
+      <% end %>
     </div>
     <% if stamps.more.any? %>
       <details class="more-stamps">
