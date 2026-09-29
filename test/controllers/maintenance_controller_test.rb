@@ -119,19 +119,17 @@ end
 class ClaudeLoginFlowTest < ActionDispatch::IntegrationTest
   teardown { ClaudeLogin.cancel! }
 
+  def current_state
+    Rack::Utils.parse_query(URI(ClaudeLogin.current.url).query)["state"]
+  end
+
   test "connect Claude from the web: link, paste code, token stored and used" do
     with_env("STACK_CLAUDE_BIN" => FAKE_CLAUDE) do
       post connect_claude_url
       follow_redirect!
-      assert_select "a.login-link[href=?]", "https://claude.com/cai/oauth/authorize?code=true&client_id=fake&state=xyz"
+      assert_select "a.login-link[href^=?]", "https://claude.com/cai/oauth/authorize?code=true&client_id=fake"
 
-      post claude_code_url, params: { code: "nope" }
-      follow_redirect!
-      assert_select ".flash-alert", /didn't accept that code/
-      assert_nil Credential.claude_token
-
-      post connect_claude_url
-      post claude_code_url, params: { code: " good#xyz " }
+      post claude_code_url, params: { code: " good##{current_state} " }
       follow_redirect!
       assert_select ".flash-notice", /Claude connected/
       assert_select ".maint-summary", /Connected as bobby@example.com/
@@ -145,6 +143,39 @@ class ClaudeLoginFlowTest < ActionDispatch::IntegrationTest
       delete disconnect_claude_url
       assert_nil Credential.claude_token
       assert_nil ClaudeCli.env["CLAUDE_CODE_OAUTH_TOKEN"]
+    end
+  end
+
+  test "a rejected code ends that sign-in and offers a fresh link that works" do
+    with_env("STACK_CLAUDE_BIN" => FAKE_CLAUDE) do
+      post connect_claude_url
+      first = ClaudeLogin.current
+      first_state = current_state
+
+      post claude_code_url, params: { code: "good" } # the part before # only
+      follow_redirect!
+      assert_select ".flash-alert", /Claude didn't accept that code \(OAuth error: Request failed with status code 400\)\. Here's a fresh link/
+      assert_nil Credential.claude_token
+      assert_not first.alive?, "the spent sign-in is ended"
+      assert_not_equal first_state, current_state, "a new challenge"
+      assert_select "a.login-link[href*=?]", "state=#{current_state}"
+
+      post claude_code_url, params: { code: "good##{first_state}" }
+      assert_nil Credential.claude_token, "a code from the old link can't complete the new one"
+
+      post claude_code_url, params: { code: "good##{current_state}" }
+      assert Credential.claude_token
+    end
+  end
+
+  test "the callback page's address, or a code broken across lines, is accepted" do
+    assert_equal "abc#xyz", ClaudeLogin.normalize_code("https://platform.claude.com/oauth/code/callback?code=abc&state=xyz")
+    assert_equal "abc#xyz", ClaudeLogin.normalize_code(" ab\nc#x yz\n")
+
+    with_env("STACK_CLAUDE_BIN" => FAKE_CLAUDE) do
+      post connect_claude_url
+      post claude_code_url, params: { code: "https://platform.claude.com/oauth/code/callback?code=good&state=#{current_state}" }
+      assert Credential.claude_token
     end
   end
 

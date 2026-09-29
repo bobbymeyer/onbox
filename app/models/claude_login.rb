@@ -16,6 +16,7 @@ class ClaudeLogin
   LIFETIME = 10.minutes
   URL_WAIT = 20.seconds
   TOKEN_WAIT = 60.seconds
+  ENTER_DELAY = 0.5
 
   class Failed < StandardError; end
 
@@ -48,7 +49,7 @@ class ClaudeLogin
     @started_at = Time.current
     @buffer = +""
     @buffer_lock = Mutex.new
-    env = ClaudeCli.env.merge("CLAUDE_CODE_OAUTH_TOKEN" => nil, "BROWSER" => "true")
+    env = ClaudeCli.env.merge("CLAUDE_CODE_OAUTH_TOKEN" => nil, "BROWSER" => "true", "TERM" => "xterm-256color")
     @reader, @writer, @pid = PTY.spawn(env, ClaudeCli.bin, "setup-token", chdir: ClaudeCli.workdir)
     @reader.winsize = [ 60, 1000 ] # wide enough that nothing wraps
     Process.detach(@pid)
@@ -65,15 +66,39 @@ class ClaudeLogin
   end
 
   # Types the code Claude showed into the CLI and stores the token it prints.
-  def submit(code)
+  # A sign-in gets one try: after a rejected code the CLI moves on to a new
+  # challenge, so this one is ended and the caller starts a fresh one.
+  def submit(pasted)
     raise Failed, "the sign-in expired; start again" unless alive?
 
-    @writer.write("#{code.to_s.strip}\r")
-    wait_until(TOKEN_WAIT) { token || exited? }
-    found = token or raise Failed, "claude didn't accept that code: #{tail}"
+    # Type the code, then press Enter on its own: sent together, some versions
+    # take the burst as a paste and the Enter never submits.
+    typed_at = output.bytesize
+    @writer.write(self.class.normalize_code(pasted))
+    sleep ENTER_DELAY
+    @writer.write("\r")
+    wait_until(TOKEN_WAIT) { token || exited? || rejected?(since: typed_at) }
+    found = token
+    unless found
+      Rails.logger.warn("[claude login] no token; CLI said: #{reason}")
+      raise Failed, output.bytesize > typed_at ? "Claude didn't accept that code (#{reason})" : "Claude Code didn't respond to the code"
+    end
     Credential.store_claude_token!(found)
   ensure
-    stop if token || exited?
+    stop
+  end
+
+  # Claude's page shows the code as "code#state". Take it with stray
+  # whitespace from a phone copy, or as the callback page's address.
+  def self.normalize_code(pasted)
+    text = pasted.to_s.gsub(/\s+/, "")
+    if text.match?(%r{\Ahttps?://}) && text.include?("code=")
+      query = Rack::Utils.parse_query(URI(text).query.to_s)
+      text = [ query["code"], query["state"] ].compact_blank.join("#")
+    end
+    text
+  rescue URI::InvalidURIError
+    text
   end
 
   def alive?
@@ -101,16 +126,45 @@ class ClaudeLogin
     end
 
     def read_output
-      loop { chunk = @reader.readpartial(4096); @buffer_lock.synchronize { @buffer << chunk } }
+      loop do
+        chunk = @reader.readpartial(4096)
+        @buffer_lock.synchronize { @buffer << chunk }
+        answer_queries(chunk)
+      end
     rescue EOFError, IOError, Errno::EIO
       nil
     ensure
       @exited = true
     end
 
+    # Answer what a real terminal would, so a CLI that asks about its
+    # terminal before taking input isn't left waiting.
+    TERMINAL_ANSWERS = {
+      "\e[c" => "\e[?62;22c",     # device attributes
+      "\e[0c" => "\e[?62;22c",
+      "\e[>0q" => "\eP>|onbox\e\\", # terminal name and version
+      "\e[?u" => "\e[?0u",        # keyboard protocol flags
+      "\e[6n" => "\e[1;1R"        # cursor position
+    }.freeze
+
+    def answer_queries(chunk)
+      TERMINAL_ANSWERS.each { |query, answer| @writer.write(answer) if chunk.include?(query) }
+    rescue IOError, Errno::EIO
+      nil
+    end
+
+    def rejected?(since:)
+      output.byteslice(since..).to_s.match?(/error|invalid|retry/i)
+    end
+
     def wait_until(limit)
       deadline = Time.current + limit
       sleep 0.1 until yield || Time.current > deadline
+    end
+
+    # What the CLI said went wrong, without its retry prompt.
+    def reason
+      tail.sub(/\A.*?prompted\s*>\s*\**\S*\s*/, "").sub(/\s*Press Enter to retry\.?\s*\z/i, "").presence || "no reason given"
     end
 
     # The last readable words the CLI printed, for error messages.

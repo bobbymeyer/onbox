@@ -31,7 +31,14 @@ class SecretaryController < ApplicationController
     redirect_to secretary_path(anchor: "claude"), status: :see_other,
       notice: status["loggedIn"] ? "Claude connected. Replies and deep duties now run on your Claude plan." : "Token saved, but claude says it isn't signed in: #{status["error"]}"
   rescue ClaudeLogin::Failed => e
-    redirect_to secretary_path(anchor: "claude"), alert: e.message, status: :see_other
+    # That sign-in is spent; offer a fresh link straight away.
+    fresh = begin
+      ClaudeLogin.start!
+    rescue ClaudeLogin::Failed
+      nil
+    end
+    redirect_to secretary_path(anchor: "claude"), status: :see_other,
+      alert: "#{e.message}. #{fresh ? "Here's a fresh link: sign in again and paste the new code (all of it, including the part after #)." : "Start again."}"
   end
 
   def cancel_claude

@@ -4,15 +4,21 @@ require "json"
 input = ARGV.first == "setup-token" ? "" : $stdin.read
 seen = { "args" => ARGV, "stdin" => input, "oauth_token" => ENV["CLAUDE_CODE_OAUTH_TOKEN"], "api_key" => ENV["ANTHROPIC_API_KEY"], "internal" => ENV["STACK_INTERNAL"], "cwd" => Dir.pwd }
 if ARGV.first == "setup-token"
-  url = "https://claude.com/cai/oauth/authorize?code=true&client_id=fake&state=xyz"
-  print "Welcome to Claude Code\r\n\e]8;;#{url}\e\\#{url}\e]8;;\e\\\r\nPaste code here if prompted > "
+  # Like the real CLI: a challenge per sign-in, codes arrive as "code#state",
+  # and a rejected code leaves it waiting on "Press Enter to retry".
+  require "securerandom"
+  state = SecureRandom.hex(4)
+  url = "https://claude.com/cai/oauth/authorize?code=true&client_id=fake&code_challenge=#{SecureRandom.hex(8)}&state=#{state}"
+  print "Welcome to Claude Code\r\n\e]8;;#{url}\a#{url}\e]8;;\a\r\nPaste code here if prompted > "
   $stdout.flush
   code = $stdin.gets.to_s.strip
-  if code == "good#xyz"
+  if code == "good##{state}"
     puts "\r\nYour OAuth token (valid for 1 year):\r\n\r\nsk-ant-oat01-#{"a" * 90}\r\n"
   else
-    puts "\r\nOAuth error: Invalid code\r\n"
-    exit 1
+    print "\r\nOAuth error: Request failed with status code 400\r\nPress Enter to retry."
+    $stdout.flush
+    $stdin.gets
+    sleep 30
   end
 elsif ARGV.first == "auth"
   puts({ "loggedIn" => true, "authMethod" => "claude.ai", "subscriptionType" => "max", "email" => "bobby@example.com" }.to_json)

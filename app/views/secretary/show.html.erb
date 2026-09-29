@@ -44,7 +44,7 @@
       <ol class="login-steps">
         <li>
           <%= link_to "Sign in to Claude", @login.url, target: "_blank", rel: "noopener", class: "tool-send login-link" %>
-          <span class="hint">and approve access. Claude then shows you a code.</span>
+          <span class="hint">and approve access. Claude then shows you a code; copy all of it.</span>
         </li>
         <li>
           <%= form_with url: claude_code_path, class: "stack-form inline-form" do |f| %>
@@ -54,7 +54,7 @@
         </li>
       </ol>
       <%= button_to "Cancel", cancel_claude_path, class: "defer-button" %>
-      <p class="hint">This runs Claude Code's own sign-in (<code>claude setup-token</code>) on the Mac; onbox only relays the link and your code. The link is good for ten minutes.</p>
+      <p class="hint">This runs Claude Code's own sign-in (<code>claude setup-token</code>) on the Mac; onbox only relays the link and your code. Each link takes one code and is good for ten minutes; use the newest link on this page.</p>
     <% elsif @credential %>
       <p class="maint-summary">Connected<%= " as #{@claude["email"]}" if @claude && @claude["email"].present? %></p>
       <p class="hint">
