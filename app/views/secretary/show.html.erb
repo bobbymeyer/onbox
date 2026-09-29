@@ -2,7 +2,7 @@
 <main class="maintenance-view">
   <nav class="maint-nav"><%= link_to "← Stack", maintenance_path %></nav>
   <h1>Secretary</h1>
-  <p class="hint">Routine duties run on a local model; deeper ones on Claude through your Claude login. Set with <code>STACK_SECRETARY</code> and <code>STACK_SECRETARY_DEEP</code>: local, claude_code, api or off.</p>
+  <p class="hint">Routine duties run on a local model; deeper ones on Claude through your Claude login. Set with <code>STACK_SECRETARY</code> and <code>STACK_SECRETARY_DEEP</code>: local, claude_code or off.</p>
 
   <ul class="maint-list">
     <% { routine: "Card fronts, “later”, hourly and daily digests",
@@ -20,11 +20,11 @@
   <% if @local %>
     <h2>Local model</h2>
     <div class="maint-card">
-      <p class="maint-summary"><%= Secretary::Backends::Local.model %> at <%= Secretary::Backends::Local.url %></p>
+      <p class="maint-summary"><%= Secretary::Backends::Local.model || "No model set" %> at <%= Secretary::Backends::Local.url %></p>
       <% if !@local["reachable"] %>
-        <p class="hint flash-alert">Ollama isn't reachable: <%= @local["error"] %>. Install it and run <code>ollama serve</code>.</p>
+        <p class="hint flash-alert">The endpoint isn't reachable: <%= @local["error"] %>. Set <code>STACK_SECRETARY_URL</code> to an OpenAI-compatible server.</p>
       <% elsif !@local["model_ready"] %>
-        <p class="hint flash-alert">Model not pulled. Run <code>ollama pull <%= Secretary::Backends::Local.model %></code>, or set <code>STACK_LOCAL_MODEL</code> to one of: <%= @local["models"].join(", ").presence || "none installed" %>.</p>
+        <p class="hint flash-alert">Set <code>STACK_SECRETARY_MODEL</code> to one of: <%= @local["models"].join(", ").presence || "no models listed" %>.</p>
       <% else %>
         <p class="hint">Ready.</p>
       <% end %>

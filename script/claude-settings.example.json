@@ -1,6 +1,6 @@
 {
   "env": {
-    "STACK_URL": "http://mac-studio:3000",
+    "STACK_URL": "https://mac-studio.your-tailnet.ts.net",
     "STACK_TOKEN": "paste the claude-code source token here"
   },
   "hooks": {

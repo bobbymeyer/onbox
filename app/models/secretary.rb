@@ -1,11 +1,12 @@
 # The model that lives inside the stack. Duties come in two tiers, each on
 # its own backend:
 #   routine (STACK_SECRETARY, default "local"): card fronts, "later",
-#     hourly and daily digests. A local model through Ollama.
+#     hourly and daily digests. A local model behind an OpenAI-compatible
+#     endpoint (STACK_SECRETARY_URL, STACK_SECRETARY_MODEL).
 #   deep (STACK_SECRETARY_DEEP, default "claude_code"): the maintenance
 #     conversation, decompose, weekly and monthly digests. Claude through the
 #     claude CLI on Bobby's Max plan.
-# Backends: local, claude_code, api (API key billing), off. Every duty
+# Backends: local, claude_code, off. Every duty
 # degrades to the intake's own front, the deferral parser or the plain
 # numbers when its backend is off or fails.
 class Secretary
@@ -13,8 +14,7 @@ class Secretary
 
   BACKENDS = {
     "local" => "Secretary::Backends::Local",
-    "claude_code" => "Secretary::Backends::ClaudeCode",
-    "api" => "Secretary::Backends::Api"
+    "claude_code" => "Secretary::Backends::ClaudeCode"
   }.freeze
   TIER_DEFAULTS = { routine: [ "STACK_SECRETARY", "local" ], deep: [ "STACK_SECRETARY_DEEP", "claude_code" ] }.freeze
 
@@ -79,7 +79,7 @@ class Secretary
     additionalProperties: false
   }.freeze
 
-  # "local", "claude_code", "api" or "off" for a tier.
+  # "local", "claude_code" or "off" for a tier.
   # Tests default to off; an explicit setting still wins.
   def self.backend_name(tier = :routine)
     variable, default = TIER_DEFAULTS.fetch(tier)

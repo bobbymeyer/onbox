@@ -7,7 +7,7 @@ class SecretaryBackendsTest < ActiveSupport::TestCase
     with_env("STACK_SECRETARY" => "local", "STACK_SECRETARY_DEEP" => "claude_code") do
       assert_equal [ "local", "claude_code" ], [ Secretary.backend_name(:routine), Secretary.backend_name(:deep) ]
     end
-    with_env("STACK_SECRETARY" => "gpt") { assert_equal "off", Secretary.backend_name }
+    with_env("STACK_SECRETARY" => "api") { assert_equal "off", Secretary.backend_name, "the API-key backend is gone" }
     assert_not Secretary.enabled?(:deep), "tests default to off"
   end
 
@@ -42,26 +42,51 @@ class SecretaryBackendsTest < ActiveSupport::TestCase
     assert_raises(Secretary::Error) { parse.({ "is_error" => true, "result" => "Credit balance is too low" }) }
   end
 
-  test "local sends the schema to Ollama and parses the reply" do
-    sent = nil
-    reply = { "message" => { "content" => { "steps" => [] }.to_json } }
-    original = Secretary::Backends::Local.method(:post)
-    Secretary::Backends::Local.define_singleton_method(:post) { |_path, body| sent = body; reply }
-    with_env("STACK_SECRETARY" => "local", "STACK_LOCAL_MODEL" => "qwen3:30b") do
-      assert_equal({ "steps" => [] }, Secretary.new.structured(system: "s", user: "u", schema: SCHEMA))
-    end
-    assert_equal [ "qwen3:30b", SCHEMA, false, false ], sent.values_at(:model, :format, :stream, :think)
-    assert_equal %w[system user], sent[:messages].map { |m| m[:role] }
+  def with_local_reply(reply)
+    sent = []
+    original = Secretary::Backends::Local.method(:request)
+    Secretary::Backends::Local.define_singleton_method(:request) { |verb, path, body = nil| sent << [ verb, path, body ]; reply }
+    yield sent
   ensure
-    Secretary::Backends::Local.define_singleton_method(:post, original)
+    Secretary::Backends::Local.define_singleton_method(:request, original)
   end
 
-  test "local reports an unreachable Ollama plainly" do
-    with_env("STACK_OLLAMA_URL" => "http://127.0.0.1:9", "STACK_SECRETARY" => "local") do
+  test "local asks the OpenAI-compatible endpoint for schema-constrained JSON" do
+    reply = { "choices" => [ { "finish_reason" => "stop", "message" => { "content" => { "steps" => [] }.to_json } } ] }
+    with_env("STACK_SECRETARY" => "local", "STACK_SECRETARY_MODEL" => "qwen-moe") do
+      with_local_reply(reply) do |sent|
+        assert_equal({ "steps" => [] }, Secretary.new.structured(system: "s", user: "u", schema: SCHEMA))
+        verb, path, body = sent.sole
+        assert_equal [ :post, "chat/completions", "qwen-moe", 0 ], [ verb, path, body[:model], body[:temperature] ]
+        assert_equal({ type: "json_schema", json_schema: { name: "reply", strict: true, schema: SCHEMA } }, body[:response_format])
+        assert_equal({ enable_thinking: false }, body[:chat_template_kwargs])
+        assert_equal %w[system user], body[:messages].map { |m| m[:role] }
+      end
+    end
+  end
+
+  test "local degrades to nil when unset, cut off, or unreachable" do
+    with_env("STACK_SECRETARY" => "local", "STACK_SECRETARY_MODEL" => nil) do
+      assert_nil Secretary.new.structured(system: "s", user: "u", schema: SCHEMA), "no model set"
+    end
+    with_env("STACK_SECRETARY" => "local", "STACK_SECRETARY_MODEL" => "qwen-moe") do
+      with_local_reply({ "choices" => [ { "finish_reason" => "length", "message" => { "content" => "{" } } ] }) do
+        assert_nil Secretary.new.structured(system: "s", user: "u", schema: SCHEMA), "ran out of tokens"
+      end
+    end
+    with_env("STACK_SECRETARY" => "local", "STACK_SECRETARY_MODEL" => "qwen-moe", "STACK_SECRETARY_URL" => "http://127.0.0.1:9/v1") do
       status = Secretary::Backends::Local.status
       assert_not status["reachable"]
-      assert_match "Ollama at http://127.0.0.1:9", status["error"]
-      assert_nil Secretary.new.structured(system: "s", user: "u", schema: SCHEMA), "falls back instead of raising"
+      assert_match "couldn't reach http://127.0.0.1:9/v1", status["error"]
+      assert_nil Secretary.new.structured(system: "s", user: "u", schema: SCHEMA)
+    end
+  end
+
+  test "local status lists the endpoint's models" do
+    with_env("STACK_SECRETARY_MODEL" => "qwen-moe") do
+      with_local_reply({ "data" => [ { "id" => "qwen-moe" }, { "id" => "gemma" } ] }) do
+        assert_equal [ true, %w[qwen-moe gemma], true ], Secretary::Backends::Local.status.values_at("reachable", "models", "model_ready")
+      end
     end
   end
 

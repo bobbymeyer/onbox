@@ -1,0 +1,18 @@
+#!/bin/sh
+# Runs onbox for real on the Mac: production mode, with Solid Queue in the
+# same process so polling (Gmail, Calendar, Reminders), digests and timed
+# wake-ups happen. Pass-through arguments go to `rails server` (e.g. -p 3000).
+set -e
+cd "$(dirname "$0")/.."
+
+export RAILS_ENV=production SOLID_QUEUE_IN_PUMA=1
+
+# The key that encrypts stored tokens must never change, so it is made once
+# and kept with the databases.
+key_file=storage/secret_key_base
+[ -s "$key_file" ] || { bin/rails secret > "$key_file"; chmod 600 "$key_file"; }
+SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(cat "$key_file")}"
+export SECRET_KEY_BASE
+
+bin/rails db:prepare
+exec bin/rails server -b 0.0.0.0 "$@"
