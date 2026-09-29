@@ -34,6 +34,11 @@
   <h2 id="claude">Claude</h2>
   <div class="maint-card claude-login">
     <p class="hint">Replies to Claude Code sessions<%= " and deep secretary duties" if @tiers.value?("claude_code") %> run through Claude Code on your Claude account, so they count against your Max plan.</p>
+    <% if ClaudeCli.found? %>
+      <p class="hint">Using <code><%= ClaudeCli.bin %></code>.</p>
+    <% else %>
+      <p class="hint flash-alert"><%= ClaudeCli.not_found_message %></p>
+    <% end %>
 
     <% if @login %>
       <ol class="login-steps">

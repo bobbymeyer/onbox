@@ -3,7 +3,7 @@ require "test_helper"
 class AgentDispatchTest < ActiveSupport::TestCase
   test "placeholders are substituted per argument, never through a shell" do
     argv = AgentDispatch.argv(session_id: "abc", instruction: "it's done; rm -rf /")
-    assert_equal [ "claude", "--resume", "abc", "-p", "it's done; rm -rf /" ], argv
+    assert_equal [ ClaudeCli.bin, "--resume", "abc", "-p", "it's done; rm -rf /" ], argv
   end
 
   test "replies run on the Claude login: API keys are removed, hooks still fire" do

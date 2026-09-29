@@ -24,6 +24,6 @@ module AgentDispatch
     output, status = Open3.capture2e(ClaudeCli.env, *argv(session_id: session_id, instruction: instruction, cwd: cwd), chdir: dir)
     [ output, status.success? ]
   rescue SystemCallError => e
-    [ e.message, false ]
+    [ ClaudeCli.explain(e), false ]
   end
 end

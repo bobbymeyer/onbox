@@ -57,7 +57,7 @@ class ClaudeLogin
     wait_until(URL_WAIT) { url || exited? }
     raise Failed, "claude didn't offer a sign-in link: #{tail}" unless url
   rescue SystemCallError => e
-    raise Failed, "couldn't run #{ClaudeCli.bin}: #{e.message}"
+    raise Failed, ClaudeCli.explain(e)
   end
 
   def url

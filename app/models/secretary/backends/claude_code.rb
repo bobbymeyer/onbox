@@ -14,7 +14,7 @@ class Secretary
         raise Error, (error.presence || output).to_s.strip.truncate(500) unless status.success?
         parse(output)
       rescue SystemCallError => e
-        raise Error, e.message
+        raise Error, ClaudeCli.explain(e)
       end
 
       # The JSON envelope carries the validated object in structured_output;
