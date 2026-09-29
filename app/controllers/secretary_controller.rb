@@ -11,6 +11,7 @@ class SecretaryController < ApplicationController
     @claude = nil
     @claude = ClaudeCli.status
     @local = Secretary::Backends::Local.status if in_use.include?("local")
+    @judge = Judge.status if Judge.enabled?
     @api_key_in_env = ENV["ANTHROPIC_API_KEY"].present?
     @credential = Credential.claude_token
     @login = ClaudeLogin.current
@@ -51,6 +52,16 @@ class SecretaryController < ApplicationController
     Credential.claude_token&.destroy!
     redirect_to secretary_path(anchor: "claude"), status: :see_other,
       notice: "Disconnected. To revoke the token itself, remove it in your Claude account settings."
+  end
+
+  def test_judge
+    started = Time.current
+    answer = Judge.read(state: "Bobby's printer finished the job he sent it.",
+      questions: { "reply" => { type: "noul", instructions: "Does someone need a written reply from Bobby?" } })
+    redirect_to secretary_path(anchor: "judge"),
+      notice: "The Judge answered in #{(Time.current - started).round(1)}s: a reply is needed with probability #{answer.dig("reply", "noul")&.round(2).inspect} (expect near 0)."
+  rescue Judge::Error => e
+    redirect_to secretary_path(anchor: "judge"), alert: "The Judge didn't answer: #{e.message}"
   end
 
   def test

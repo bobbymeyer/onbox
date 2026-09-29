@@ -76,7 +76,7 @@ module Gestures
           summary: step["summary"].to_s.strip.truncate(200),
           ask: Card::ASKS.include?(step["ask"]) ? step["ask"] : "acknowledge",
           proposed_action: step["proposed_action"].to_s.strip.presence,
-          payload: card.payload.except("likely_stamps", "reminder_id").merge("decomposed_from" => card.id),
+          payload: card.payload.except(*Card::SECRETARY_KEYS, "reminder_id").merge("decomposed_from" => card.id),
           digested_at: Time.current
         )
       end

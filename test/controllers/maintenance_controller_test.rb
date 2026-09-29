@@ -116,6 +116,64 @@ class SecretaryControllerTest < ActionDispatch::IntegrationTest
   end
 end
 
+class JudgeControllerTest < ActionDispatch::IntegrationTest
+  test "the secretary page says the Judge is off until it's set" do
+    get secretary_url
+    assert_select "#judge + .maint-card", /Off. Set STACK_JUDGE_URL/
+  end
+
+  test "shows the Judge's status and tests it over HTTP" do
+    with_fake_openjev do |url|
+      with_env("STACK_JUDGE_URL" => url) do
+        get secretary_url
+        assert_select "#judge + .maint-card", /jev-latest at #{Regexp.escape(url)}.*Ready\./m
+
+        post test_judge_url
+        follow_redirect!
+        assert_select ".flash-notice", /The Judge answered in [\d.]+s: a reply is needed with probability 0.03/
+      end
+    end
+  end
+
+  test "a Judge that isn't there says so" do
+    with_env("STACK_JUDGE_URL" => "http://127.0.0.1:9") do
+      get secretary_url
+      assert_select "#judge + .maint-card .flash-alert", /isn't reachable/
+      post test_judge_url
+      follow_redirect!
+      assert_select ".flash-alert", /The Judge didn't answer: couldn't reach/
+    end
+  end
+
+  private
+    # A one-thread OpenJev on a free port: /v1/models and /v1/systemone.
+    def with_fake_openjev
+      server = TCPServer.new("127.0.0.1", 0)
+      thread = Thread.new do
+        loop do
+          client = server.accept
+          request_line = client.gets.to_s
+          length = 0
+          while (line = client.gets) && line != "\r\n"
+            length = line.split(":", 2).last.to_i if line.downcase.start_with?("content-length")
+          end
+          body = JSON.parse(client.read(length)) if length.positive?
+          reply = if request_line.include?("/v1/models")
+            { "data" => [ { "id" => "jev-latest" } ] }
+          else
+            { "model" => body["model"], "answers" => body["questions"].transform_values { { "noul" => 0.03 } } }
+          end.to_json
+          client.write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: #{reply.bytesize}\r\nConnection: close\r\n\r\n#{reply}")
+          client.close
+        end
+      end
+      yield "http://127.0.0.1:#{server.addr[1]}"
+    ensure
+      thread&.kill
+      server&.close
+    end
+end
+
 class ClaudeLoginFlowTest < ActionDispatch::IntegrationTest
   teardown { ClaudeLogin.cancel! }
 

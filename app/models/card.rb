@@ -3,6 +3,8 @@
 # one in front of Bobby.
 class Card < ApplicationRecord
   ASKS = %w[decision reply review acknowledge].freeze
+  # Payload keys the secretary writes, kept out of what it reads.
+  SECRETARY_KEYS = %w[likely_stamps judge].freeze
 
   belongs_to :source, optional: true
   belongs_to :parent_card, class_name: "Card", optional: true

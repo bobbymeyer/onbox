@@ -31,6 +31,24 @@
     </div>
   <% end %>
 
+  <h2 id="judge">Judge</h2>
+  <div class="maint-card">
+    <% if @judge %>
+      <p class="maint-summary"><%= Judge.model %> at <%= Judge.url %></p>
+      <p class="hint">Answers each new card's ask, whether it jumps the queue, its likely stamps and which standing instructions apply. Only answers at <%= Judge.threshold %> or past it either way count; the rest stay with the secretary. Its reading is under “Raw payload” on the card's back.</p>
+      <% if !@judge["reachable"] %>
+        <p class="hint flash-alert">The Judge isn't reachable: <%= @judge["error"] %>. Cards are written without it.</p>
+      <% elsif !@judge["model_ready"] %>
+        <p class="hint flash-alert">It doesn't list <%= Judge.model %>. Set <code>STACK_JUDGE_MODEL</code> to one of: <%= @judge["models"].join(", ").presence || "no models listed" %>.</p>
+      <% else %>
+        <p class="hint">Ready.</p>
+      <% end %>
+      <div class="maint-actions"><%= button_to "Test", test_judge_path %></div>
+    <% else %>
+      <p class="hint">Off. Set <code>STACK_JUDGE_URL</code> to an OpenJev server (e.g. <code>http://127.0.0.1:9300</code>) to have it answer the typed parts of each card's front.</p>
+    <% end %>
+  </div>
+
   <h2 id="claude">Claude</h2>
   <div class="maint-card claude-login">
     <p class="hint">Replies to Claude Code sessions<%= " and deep secretary duties" if @tiers.value?("claude_code") %> run through Claude Code on your Claude account, so they count against your Max plan.</p>

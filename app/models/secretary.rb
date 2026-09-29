@@ -6,7 +6,8 @@
 #   deep (STACK_SECRETARY_DEEP, default "claude_code"): the maintenance
 #     conversation, decompose, weekly and monthly digests. Claude through the
 #     claude CLI on Bobby's Max plan.
-# Backends: local, claude_code, off. Every duty
+# Backends: local, claude_code, off. Beside them, the Judge (OpenJev) answers
+# the typed parts of a card's front when STACK_JUDGE_URL is set. Every duty
 # degrades to the intake's own front, the deferral parser or the plain
 # numbers when its backend is off or fails.
 class Secretary
@@ -98,16 +99,21 @@ class Secretary
     new.resolve_later(text, card: card, now: now)
   end
 
+  # The Judge (when set) answers the typed parts first and says which standing
+  # instructions apply; the secretary writes the front with those; the
+  # Judge's clear answers then stand over the secretary's.
   def digest(card)
-    front = self.class.enabled? ? ask_for_front(card) : nil
+    stamp_labels = Stamp.for_card(card).by_use.pluck(:label)
+    reading = Judge.front(card, stamps: stamp_labels, directives: Directive.in_order.to_a) if Judge.enabled?
+    front = ask_for_front(card, stamp_labels, reading&.dig("directives")) if self.class.enabled?
+    front = Judge.overrule(front, reading, card)
     if front
-      stamp_labels = Stamp.for_card(card).pluck(:label)
       card.update!(
         project: front["project"].presence || card.project,
         summary: front["summary"].to_s.truncate(200).presence || card.summary,
         ask: front["ask"],
         proposed_action: front["proposed_action"].presence,
-        payload: card.payload.merge("likely_stamps" => Array(front["likely_stamps"]) & stamp_labels),
+        payload: card.payload.merge("likely_stamps" => Array(front["likely_stamps"]) & stamp_labels, "judge" => reading&.dig("answers")).compact,
         digested_at: Time.current
       )
       place(card, front)
@@ -180,21 +186,21 @@ class Secretary
       nil
     end
 
-    def ask_for_front(card)
-      stamps = Stamp.for_card(card).by_use.pluck(:label)
+    def ask_for_front(card, stamps, directives = nil)
+      directives ||= Directive.in_order
       source = card.source
       structured(
         system: DIGEST_SYSTEM,
         user: <<~EVENT,
           Now: #{Time.current.iso8601} (#{Time.zone.name})
-          Standing instructions: #{Directive.texts.presence&.join("; ") || "none"}
+          Standing instructions: #{directives.map { |d| "[#{d.id}] #{d.text}" }.join("; ").presence || "none"}
           Card type: #{card.card_type}
           Source: #{source&.name} (#{source&.kind})
           Intake's draft front: #{{ project: card.project, summary: card.summary, ask: card.ask }.to_json}
           Available stamps: #{stamps.to_json}
 
           Event payload:
-          #{JSON.pretty_generate(card.payload.except("likely_stamps"))}
+          #{JSON.pretty_generate(card.payload.except(*Card::SECRETARY_KEYS))}
         EVENT
         schema: DIGEST_SCHEMA
       )

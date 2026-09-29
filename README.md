@@ -80,6 +80,36 @@ the plain numbers.
 `/secretary` shows each tier's backend, whether the endpoint and model are
 ready, the Claude connection, and a **Test** button per tier.
 
+### The Judge: OpenJev beside the secretary
+
+Set `STACK_JUDGE_URL` to an [OpenJev](https://github.com/razorback16/openjev)
+server (on the Studio, `http://127.0.0.1:9300`) and each new card's front gets
+a second, typed reading. OpenJev answers questions as probabilities rather
+than writing text, so it takes the parts of the front that are a choice:
+
+| Question | Type | What it decides |
+|---|---|---|
+| What does this card need? | choice | the ask: decision, reply, review, acknowledge |
+| Does it need you now? | yes/no | front of the stack, or where new cards land |
+| Would you stamp it X? | yes/no per stamp (up to 12) | the likely stamps, up to three |
+| Does this instruction apply? | yes/no per standing instruction | which instructions the secretary sees |
+
+The Judge reads first. The secretary then writes the summary and proposed
+action with only the standing instructions that weren't clearly irrelevant,
+and the Judge's clear answers stand over its own. Only answers at
+`STACK_JUDGE_THRESHOLD` (default `0.8`) or past it either way count; anything
+in between stays with the secretary. A hold stays the secretary's call, since
+it needs a time. With the secretary off, the Judge still sets the ask,
+placement and stamps on the intake's own front. When the Judge is unset or
+doesn't answer (it waits up to 20 seconds, which covers a slow first read after
+the model was paged out), cards are written exactly as without it.
+
+Each card keeps the Judge's probabilities under "Raw payload" on its back and
+in the log (`[judge] card 12: …`, with how many answers were unclear), so the
+threshold can be tuned from real cards. `/secretary` shows whether the Judge is
+reachable and lists its model, with a **Test** button. The stack's order stays
+positional; the Judge only chooses between "front" and where new cards land.
+
 ### Claude Code hooks
 
 Add the hooks to `~/.claude/settings.json` (see `script/claude-settings.example.json`):
@@ -204,6 +234,7 @@ otherwise after your next gesture. Idle periods get nothing.
 | `STACK_PASSWORD` / `STACK_USER` | unset / `bobby` | Optional HTTP basic auth on the views; Tailscale is the main perimeter |
 | `STACK_SECRETARY` / `STACK_SECRETARY_DEEP` | `local` / `claude_code` | Backend per tier: `local`, `claude_code`, `off` |
 | `STACK_SECRETARY_URL` / `STACK_SECRETARY_MODEL` | `https://chat.bobbymeyer.com/v1` / — | The local, OpenAI-compatible model |
+| `STACK_JUDGE_URL` / `STACK_JUDGE_MODEL` / `STACK_JUDGE_THRESHOLD` | unset (off) / `jev-latest` / `0.8` | The OpenJev server beside the secretary, its model, and how sure an answer must be to count |
 | `STACK_CLAUDE_BIN` / `STACK_CLAUDE_MODEL` | `claude` / CLI default | The claude CLI, and the model for the secretary's Claude runs |
 | `STACK_AGENT_COMMAND` | `{claude} --resume {session_id} -p {instruction}` | How an instruction reaches a session; placeholders are substituted per argument, never through a shell |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Gmail's OAuth client, if not entered on `/sources` |
@@ -244,6 +275,8 @@ otherwise after your next gesture. Idle periods get nothing.
 - The noticer matches phrases exactly after normalizing, so it won't see that
   "PR and merge" and "open a PR then merge" are the same request.
 - Not built: noticing when grooming time outruns handling time.
+- The Judge reads only new cards' fronts. The noticer ("should I offer a
+  stamp for this?") and the digests' "what needs you" don't ask it yet.
 
 ## Development
 

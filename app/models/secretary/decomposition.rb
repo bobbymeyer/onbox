@@ -47,7 +47,7 @@ class Secretary
         Proposed action: #{card.proposed_action}
 
         Payload:
-        #{JSON.pretty_generate(card.payload.except("likely_stamps"))}
+        #{JSON.pretty_generate(card.payload.except(*Card::SECRETARY_KEYS))}
       CARD
       Array(answer&.dig("steps"))
     end
