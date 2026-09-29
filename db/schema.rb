@@ -10,7 +10,20 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_29_013256) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_29_015244) do
+  create_table "accountings", force: :cascade do |t|
+    t.string "period", null: false
+    t.datetime "starts_at", null: false
+    t.datetime "ends_at", null: false
+    t.text "body", null: false
+    t.json "stats", default: {}, null: false
+    t.integer "card_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["card_id"], name: "index_accountings_on_card_id"
+    t.index ["period", "starts_at"], name: "index_accountings_on_period_and_starts_at", unique: true
+  end
+
   create_table "cards", force: :cascade do |t|
     t.integer "source_id"
     t.string "key"
@@ -118,6 +131,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_29_013256) do
     t.index ["kind", "fired_at", "fires_at"], name: "index_triggers_on_kind_and_fired_at_and_fires_at"
   end
 
+  add_foreign_key "accountings", "cards", on_delete: :nullify
   add_foreign_key "cards", "cards", column: "blocked_by_id"
   add_foreign_key "cards", "cards", column: "parent_card_id"
   add_foreign_key "cards", "sources"

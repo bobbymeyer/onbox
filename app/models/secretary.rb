@@ -100,9 +100,12 @@ class Secretary
     case front["placement"]
     when "front"
       card.update!(position: Card.bottom_position)
+      card.handlings.create!(verb: "secretary", text: "Put in front on arrival")
     when "hold"
       time = Time.zone.parse(front["hold_until"].to_s) rescue nil
-      card.hold!(until_time: time) if time&.future?
+      return unless time&.future?
+      card.hold!(until_time: time)
+      card.handlings.create!(verb: "secretary", text: "Held on arrival until #{time.to_fs(:short)}")
     end
   end
 

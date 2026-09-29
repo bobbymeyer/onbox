@@ -1,0 +1,8 @@
+<div class="digest-body">
+  <p class="tool-label"><%= card.payload["title"] %></p>
+  <%= simple_format card.payload["body"] %>
+  <%= link_to "All digests", digests_path, class: "quiet-link" %>
+</div>
+<%= form_with url: reply_card_path(card), class: "tool" do |f| %>
+  <%= f.submit card.type.send_label, class: "tool-send" %>
+<% end %>

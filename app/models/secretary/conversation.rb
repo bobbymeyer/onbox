@@ -76,7 +76,9 @@ class Secretary
         directive&.destroy! && "Forgot: #{directive.text}"
       else
         card = Card.open.find_by(id: op["target_id"]) or return
-        apply_to_card(card, op["op"], op["value"])
+        done = apply_to_card(card, op["op"], op["value"])
+        card.handlings.create!(verb: "secretary", text: "#{done} (asked in maintenance)") if done
+        done
       end
     rescue ActiveRecord::RecordInvalid, ArgumentError
       nil
@@ -124,6 +126,9 @@ class Secretary
 
         Standing instructions:
         #{Directive.texts.join("\n").presence || "none"}
+
+        Your latest digests:
+        #{Accounting.newest_first.limit(3).map { |a| "- #{a.title}: #{a.body}" }.join("\n").presence || "none"}
 
         Conversation so far (latest last):
         #{history.map { |m| "#{m.role}: #{m.body}" }.join("\n")}

@@ -71,6 +71,35 @@ what your reply did (an instruction on agent cards, a reply on email cards);
 successors to the new stamp on `/stamps`. The threshold is
 `STACK_NOTICER_THRESHOLD`.
 
+## The secretary's digests (`/digests`)
+
+Bobby only sees the card the secretary chose, so it owes a periodic
+accounting: what it held and why, what it put in front on its own judgment,
+what arrived and got handled, and what looks like drift (stale cards, the same
+card deferred again and again, a pile-up from one source, a rising flip rate).
+
+Digests are written every hour for the hour, day, week and month that just
+closed (calendar boundaries in `STACK_TIME_ZONE`, weeks from Monday). Each
+longer one is built from the shorter ones inside it plus the log, so a weekly
+reads its dailies rather than a week of raw events. The secretary's own moves
+(placements on arrival, changes asked for in maintenance) are logged, so they
+show up here. A quiet hour writes nothing and costs no API call; longer
+periods still report while cards are waiting. Without API access the digest
+is the plain numbers.
+
+Hourly digests stay on `/digests`. Daily, weekly and monthly ones also become a
+card to read and acknowledge; one written overnight is held until 08:00. The
+secretary also reads its latest digests when you talk to it.
+
+| Variable | Default | |
+|---|---|---|
+| `STACK_DIGEST_CARDS` | `daily,weekly,monthly` | Which periods become cards |
+| `STACK_DIGEST_HOUR` | `8` | When overnight digest cards are released |
+
+**Catch up now** on `/digests` (or `bin/rails stack:digest`) writes anything due.
+Each run writes only the latest missed window per period, so the very first
+run can produce a daily, weekly and monthly digest at once.
+
 ## Running it on the Mac Studio
 
 ```sh
@@ -190,8 +219,7 @@ held on `<source>:<event>`). Senders that can't set headers can pass `?token=`.
   yet re-judge the whole order as things change.
 - The noticer matches phrases exactly after normalizing; it won't yet see
   that "PR and merge" and "open a PR then merge" are the same request.
-- Not built yet: the secretary's periodic accounting, noticing when grooming
-  time outruns handling time, and calendar.
+- Not built yet: noticing when grooming time outruns handling time, and calendar.
 
 ## Tests
 

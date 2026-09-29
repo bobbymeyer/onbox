@@ -1,0 +1,25 @@
+<% content_for :title, "Digests" %>
+<main class="maintenance-view">
+  <nav class="maint-nav">
+    <%= link_to "← Stack", maintenance_path %>
+    <%= link_to_unless @period.nil?, "All", digests_path %>
+    <% Accounting::PERIODS.each_key do |period| %>
+      <%= link_to_unless @period == period, period.capitalize, digests_path(period: period) %>
+    <% end %>
+  </nav>
+  <h1>Digests</h1>
+  <p class="hint">What the secretary held and why, what it put in front, and what came and went. Written as each hour, day, week and month closes; quiet hours are skipped.</p>
+  <%= button_to "Catch up now", catch_up_digests_path, class: "defer-button" %>
+
+  <% if @accountings.empty? %>
+    <p class="hint">No digests yet.</p>
+  <% end %>
+  <ul class="maint-list digests">
+    <% @accountings.each do |accounting| %>
+      <li class="maint-card digest digest-<%= accounting.period %>">
+        <p class="maint-summary"><%= accounting.title %></p>
+        <%= simple_format accounting.body %>
+      </li>
+    <% end %>
+  </ul>
+</main>

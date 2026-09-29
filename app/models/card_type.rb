@@ -66,10 +66,18 @@ class CardType
     def supports?(_kind) = false
   end
 
-  REGISTRY = [ Agent.new, Email.new, Generic.new, StampOffer.new ].index_by(&:name).freeze
+  # The secretary's periodic accounting, delivered as a card to read.
+  class Digest < Generic
+    def name = "digest"
+    def send_label = "Got it"
+    def decomposable? = false
+    def supports?(_kind) = false
+  end
+
+  REGISTRY = [ Agent.new, Email.new, Generic.new, StampOffer.new, Digest.new ].index_by(&:name).freeze
   NAMES = REGISTRY.keys.freeze
-  # Types a source or stamp can be for; offers are the stack's own.
-  SOURCE_NAMES = (NAMES - [ "stamp_offer" ]).freeze
+  # Types a source or stamp can be for; offers and digests are the stack's own.
+  SOURCE_NAMES = (NAMES - %w[stamp_offer digest]).freeze
 
   SOURCE_KIND_DEFAULTS = { "claude_code" => "agent", "email" => "email" }.freeze
 

@@ -376,3 +376,9 @@ body.dispenser {
 }
 .tool-stamp-offer .hint { margin: 0; }
 .decline { align-self: flex-start; }
+
+.digest-body { font-size: 0.95rem; }
+.digest-body p { margin: 0 0 0.5rem; }
+.digests .digest p:not(.maint-summary) { margin: 0.3rem 0; font-size: 0.92rem; }
+.digests .digest-hourly { border-left-color: var(--line); }
+.digests .digest-weekly, .digests .digest-monthly { border-left-color: var(--accent); }

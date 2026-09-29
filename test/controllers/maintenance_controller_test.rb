@@ -78,3 +78,26 @@ class NoticerFlowTest < ActionDispatch::IntegrationTest
     assert Stamp.exists?(label: "Staging", card_type: "agent")
   end
 end
+
+class DigestsControllerTest < ActionDispatch::IntegrationTest
+  test "lists digests and catches up" do
+    Card.create!(summary: "Waiting")
+    travel_to(2.days.from_now) do
+      post catch_up_digests_url
+      follow_redirect!
+      assert_select ".flash-notice", /Wrote/
+      assert_select ".digest-daily .maint-summary", /Daily digest/
+
+      get digests_url(period: "hourly")
+      assert_select ".digest-daily", false
+    end
+  end
+
+  test "a digest card shows its body on the front" do
+    card = Card.create!(card_type: "digest", summary: "Held 2 receipts", payload: { "title" => "Daily digest · Mon 28 Sep", "body" => "Held two receipts until evening." })
+    get root_url
+    assert_select ".digest-body", /Held two receipts/
+    assert_select "input[type=submit][value='Got it']"
+    assert_equal card, Card.current
+  end
+end

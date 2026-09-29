@@ -19,3 +19,6 @@ production:
   poll_gmail:
     class: GmailPollJob
     schedule: every 2 minutes
+  secretary_digests:
+    class: AccountingJob
+    schedule: every hour at minute 2
