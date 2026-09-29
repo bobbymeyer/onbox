@@ -1,10 +1,22 @@
-# The LLM that lives inside the stack. v0 duties: digest each incoming event
-# into a clean, self-sufficient front, and resolve "later" into a trigger.
-# Every duty degrades to the intake's own front (or the deterministic
-# deferral parser) when the model is unavailable or declines.
+# The model that lives inside the stack. Duties come in two tiers, each on
+# its own backend:
+#   routine (STACK_SECRETARY, default "local"): card fronts, "later",
+#     hourly and daily digests. A local model through Ollama.
+#   deep (STACK_SECRETARY_DEEP, default "claude_code"): the maintenance
+#     conversation, decompose, weekly and monthly digests. Claude through the
+#     claude CLI on Bobby's Max plan.
+# Backends: local, claude_code, api (API key billing), off. Every duty
+# degrades to the intake's own front, the deferral parser or the plain
+# numbers when its backend is off or fails.
 class Secretary
-  MODEL = ENV.fetch("STACK_SECRETARY_MODEL", "claude-opus-5-5")
-  BETAS = [ "server-side-fallback-2026-07-01" ].freeze
+  class Error < StandardError; end
+
+  BACKENDS = {
+    "local" => "Secretary::Backends::Local",
+    "claude_code" => "Secretary::Backends::ClaudeCode",
+    "api" => "Secretary::Backends::Api"
+  }.freeze
+  TIER_DEFAULTS = { routine: [ "STACK_SECRETARY", "local" ], deep: [ "STACK_SECRETARY_DEEP", "claude_code" ] }.freeze
 
   DIGEST_SYSTEM = <<~PROMPT.freeze
     You are the secretary for The Stack, a single-user queue of index cards.
@@ -63,8 +75,15 @@ class Secretary
     additionalProperties: false
   }.freeze
 
-  def self.enabled?
-    ENV["STACK_SECRETARY"] != "off" && !Rails.env.test?
+  # "local", "claude_code", "api" or "off" for a tier.
+  # Tests default to off; an explicit setting still wins.
+  def self.backend_name(tier = :routine)
+    variable, default = TIER_DEFAULTS.fetch(tier)
+    ENV.fetch(variable, Rails.env.test? ? "off" : default).presence_in([ *BACKENDS.keys, "off" ]) || "off"
+  end
+
+  def self.enabled?(tier = :routine)
+    backend_name(tier) != "off"
   end
 
   def self.digest(card)
@@ -132,22 +151,14 @@ class Secretary
     nil
   end
 
-  def structured(system:, user:, schema:, effort: :low)
-    message = client.beta.messages.create(
-      model: MODEL,
-      max_tokens: 16_000,
-      system_: system,
-      messages: [ { role: "user", content: user } ],
-      output_config: { effort: effort, format: { type: :json_schema, schema: schema } },
-      fallbacks: :default,
-      betas: BETAS
-    )
-    return if message.stop_reason == :refusal
-
-    text = message.content.select { |b| b.type == :text }.map(&:text).join
-    JSON.parse(text)
-  rescue Anthropic::Errors::Error, JSON::ParserError => e
-    Rails.logger.warn("[secretary] #{e.class}: #{e.message}")
+  # One structured call on the tier's backend. Returns the parsed object, or
+  # nil when the tier is off or the backend fails (logged).
+  def structured(system:, user:, schema:, effort: :low, tier: :routine)
+    name = self.class.backend_name(tier)
+    return if name == "off"
+    BACKENDS.fetch(name).constantize.call(system: system, user: user, schema: schema, effort: effort)
+  rescue Error => e
+    Rails.logger.warn("[secretary:#{name}] #{e.message}")
     nil
   end
 
@@ -179,9 +190,5 @@ class Secretary
         keys << "#{card.source.name}:from:#{address.downcase}"
       end
       keys
-    end
-
-    def client
-      @client ||= Anthropic::Client.new
     end
 end

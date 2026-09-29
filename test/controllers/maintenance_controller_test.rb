@@ -101,3 +101,17 @@ class DigestsControllerTest < ActionDispatch::IntegrationTest
     assert_equal card, Card.current
   end
 end
+
+class SecretaryControllerTest < ActionDispatch::IntegrationTest
+  test "shows tiers and the Claude login, and tests a tier" do
+    with_env("STACK_SECRETARY" => "off", "STACK_SECRETARY_DEEP" => "claude_code", "STACK_CLAUDE_BIN" => FAKE_CLAUDE) do
+      get secretary_url
+      assert_select ".maint-summary", /Signed in as bobby@example.com/
+      assert_match "max", response.body
+
+      post test_secretary_url(tier: "deep")
+      follow_redirect!
+      assert_select ".flash-notice", /Deep \(claude_code\) answered/
+    end
+  end
+end

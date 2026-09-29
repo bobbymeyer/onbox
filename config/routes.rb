@@ -26,6 +26,8 @@ Rails.application.routes.draw do
   post "stack/bulk" => "maintenance#bulk", as: :bulk_cards
   post "stack/secretary" => "maintenance#converse", as: :secretary_conversation
   resources :directives, only: [ :create, :destroy ]
+  get "secretary" => "secretary#show", as: :secretary
+  post "secretary/test" => "secretary#test", as: :test_secretary
   resources :digests, only: :index do
     post :catch_up, on: :collection
   end

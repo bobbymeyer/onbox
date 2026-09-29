@@ -72,3 +72,15 @@ class ActiveSupport::TestCase
     object.define_singleton_method(name, original) unless object.respond_to?(name)
   end
 end
+
+class ActiveSupport::TestCase
+  FAKE_CLAUDE = Rails.root.join("test/support/fake_claude").to_s
+
+  def with_env(vars)
+    old = vars.keys.to_h { |k| [ k, ENV[k] ] }
+    vars.each { |k, v| ENV[k] = v }
+    yield
+  ensure
+    old.each { |k, v| ENV[k] = v }
+  end
+end

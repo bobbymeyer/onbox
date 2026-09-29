@@ -60,10 +60,11 @@ module Accountant
     nil
   end
 
-  def write(period, starts, ends, stats, children)
-    return unless Secretary.enabled?
+  DEEP_PERIODS = %w[weekly monthly].freeze
 
+  def write(period, starts, ends, stats, children)
     Secretary.new.structured(
+      tier: DEEP_PERIODS.include?(period) ? :deep : :routine,
       system: SYSTEM,
       schema: SCHEMA,
       effort: period == "hourly" ? :low : :medium,

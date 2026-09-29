@@ -37,9 +37,9 @@ class Secretary
 
     # Returns [{ "summary", "ask", "proposed_action" }] or [] when unavailable.
     def propose(card)
-      return [] unless Secretary.enabled?
+      return [] unless Secretary.enabled?(:deep)
 
-      answer = Secretary.new.structured(system: SYSTEM, user: <<~CARD, schema: SCHEMA, effort: :medium)
+      answer = Secretary.new.structured(system: SYSTEM, user: <<~CARD, schema: SCHEMA, effort: :medium, tier: :deep)
         Card type: #{card.card_type}
         Project: #{card.project}
         Summary: #{card.summary}

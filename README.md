@@ -13,7 +13,7 @@ Rails 8, omakase: SQLite, Solid Queue / Cache / Cable, Hotwire, importmap, Props
 | 1. Intake endpoint, Source and Card tables, phone dispenser | Done: `POST /intake`, dispenser at `/` |
 | 2. Claude Code as first source (Stop + Notification hooks) | Done: `script/stack-hook`. `claude agents --json` reconciliation not yet |
 | 3. Agent card type; handling sends the instruction back to the session | Done: `claude --resume <session> -p <instruction>` (configurable) |
-| 4. Secretary v0: one LLM call at intake writes summary, ask, proposed action | Done: `Secretary.digest`, in a background job |
+| 4. Secretary v0: one LLM call at intake writes summary, ask, proposed action | Done: `Secretary.digest`, in a background job, on a local model |
 | 5. Stamps: table, tray, PR-and-merge first | Done, with successors and repeats |
 | 6. Top-of-stack and later, with time triggers | Done, plus event triggers |
 | 7. Email as the second source and card type | Done: Gmail API polling, reply in thread, archive |
@@ -115,21 +115,65 @@ bin/dev                    # or: RAILS_ENV=production bin/rails server
 Open `http://<mac-studio>.<tailnet>.ts.net:3000` on the phone. Add it to the
 home screen for full screen.
 
+### Claude login and the local secretary
+
+**Claude runs on your Max plan, through your login.** Everything Claude does
+for the stack goes through the official `claude` CLI signed in to your Claude
+account: replies to Claude Code sessions (`claude --resume … -p`), and the
+secretary's deeper duties. Sign in once on the Mac as the user that runs the
+server:
+
+```sh
+claude auth login          # choose your Claude (Max) account
+claude auth status         # should say you're signed in
+```
+
+If the server runs as a background service that can't read your login
+keychain, run `claude setup-token` and give the service the token as
+`CLAUDE_CODE_OAUTH_TOKEN`. Every `claude` run the stack starts has
+`ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` removed from its environment,
+because the CLI would otherwise bill an API key instead of your subscription.
+The secretary's own runs are marked `STACK_INTERNAL=1`, which `script/stack-hook`
+ignores, so they never come back as cards. (The stack never lifts your login
+token out of Claude Code to call the API directly: subscription login is only
+for Claude Code itself.)
+
+**The secretary is mostly local.** Its duties come in two tiers:
+
+| Tier | Duties | Setting | Default |
+|---|---|---|---|
+| routine | card fronts, "later", hourly and daily digests | `STACK_SECRETARY` | `local` (Ollama) |
+| deep | conversation, decompose, weekly and monthly digests | `STACK_SECRETARY_DEEP` | `claude_code` (your Max plan) |
+
+Each accepts `local`, `claude_code`, `api` (an Anthropic API key, billed to the
+API) or `off`. For local, install [Ollama](https://ollama.com), then
+`ollama pull qwen3:30b` (or set `STACK_LOCAL_MODEL` to a model you have). The
+reply is constrained to each duty's JSON schema, so a mid-sized local model is
+enough for fronts and deferrals. Set `STACK_SECRETARY_DEEP=local` to keep
+everything on the Mac.
+
+`/secretary` (linked from `/stack`) shows each tier's backend, whether Ollama
+and the model are ready, which account the `claude` CLI is signed in to, and a
+**Test** button per tier.
+
 ### Environment
 
 | Variable | Default | What it does |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | — | Secretary's credentials. Without them, cards keep the intake's plain front |
-| `STACK_SECRETARY` | on | `off` disables the LLM entirely |
-| `STACK_SECRETARY_MODEL` | `claude-opus-5-5` | Model for digests and deferrals |
+| `STACK_SECRETARY` | `local` | Backend for routine duties: `local`, `claude_code`, `api`, `off` |
+| `STACK_SECRETARY_DEEP` | `claude_code` | Backend for deep duties |
+| `STACK_LOCAL_MODEL` / `STACK_OLLAMA_URL` | `qwen3:30b` / `http://localhost:11434` | The local model |
+| `STACK_CLAUDE_BIN` | `claude` | Path to the claude CLI, if it isn't on the server's `PATH` |
+| `STACK_CLAUDE_MODEL` | CLI default | Model for the secretary's Claude runs (e.g. `opus`) |
+| `CLAUDE_CODE_OAUTH_TOKEN` | — | From `claude setup-token`, when the server can't read your login |
+| `ANTHROPIC_API_KEY` / `STACK_SECRETARY_MODEL` | — / `claude-opus-5-5` | Only for the `api` backend; never passed to `claude` |
 | `STACK_TIME_ZONE` | `UTC` | Where "tonight" and "tomorrow" resolve. Set this, e.g. `Pacific Time (US & Canada)` |
-| `STACK_AGENT_COMMAND` | `claude --resume {session_id} -p {instruction}` | How an instruction reaches a session. `{session_id}`, `{instruction}`, `{cwd}` are substituted per argument (no shell). Runs in the session's cwd |
+| `STACK_AGENT_COMMAND` | `{claude} --resume {session_id} -p {instruction}` | How an instruction reaches a session. `{claude}`, `{session_id}`, `{instruction}`, `{cwd}` are substituted per argument (no shell). Runs in the session's cwd, on your Claude login |
 | `STACK_PASSWORD` / `STACK_USER` | unset / `bobby` | Optional HTTP basic auth on the views. Tailscale is the main perimeter |
 | `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` | — | OAuth client for the email source (see below) |
 
-The secretary calls the API with server-side refusal fallbacks enabled
-(`fallbacks: :default`), so a declined request is retried on another model
-instead of failing the digest. Remove it in `app/models/secretary.rb` if you don't want it.
+With the `api` backend, the secretary enables server-side refusal fallbacks
+(`fallbacks: :default`), so a declined request is retried on another model.
 
 Held cards wake when a page loads, and every minute through the Solid Queue
 recurring job (`config/recurring.yml`, production).

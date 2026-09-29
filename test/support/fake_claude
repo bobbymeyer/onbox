@@ -1,0 +1,16 @@
+#!/usr/bin/env ruby
+# Stands in for the claude CLI in tests: reports what it was given.
+require "json"
+input = $stdin.read
+seen = { "args" => ARGV, "stdin" => input, "api_key" => ENV["ANTHROPIC_API_KEY"], "internal" => ENV["STACK_INTERNAL"], "cwd" => Dir.pwd }
+if ARGV.first == "auth"
+  puts({ "loggedIn" => true, "authMethod" => "claude.ai", "subscriptionType" => "max", "email" => "bobby@example.com" }.to_json)
+elsif ENV["FAKE_CLAUDE_FAIL"]
+  warn "Not logged in"
+  exit 1
+elsif ARGV.include?("--json-schema")
+  puts({ "type" => "result", "is_error" => false, "result" => "", "structured_output" => { "reply" => "hi", "seen" => seen } }.to_json)
+else
+  File.write(ENV.fetch("FAKE_CLAUDE_LOG"), seen.to_json) if ENV["FAKE_CLAUDE_LOG"]
+  puts "ok"
+end

@@ -54,12 +54,12 @@ class Secretary
       SecretaryMessage.create!(role: "bobby", body: text)
       history = SecretaryMessage.recent(12)
 
-      answer = Secretary.enabled? && Secretary.new.structured(system: SYSTEM, user: context(history), schema: SCHEMA, effort: :medium)
+      answer = Secretary.new.structured(system: SYSTEM, user: context(history), schema: SCHEMA, effort: :medium, tier: :deep)
       body, applied =
         if answer
           [ answer["reply"].to_s.presence || "Done.", Array(answer["operations"]).filter_map { |op| apply(op) } ]
         else
-          [ "I'm not available right now (no API access). You can still add a standing instruction below.", [] ]
+          [ "I'm not available right now (see /secretary). You can still add a standing instruction below.", [] ]
         end
 
       SecretaryMessage.create!(role: "secretary", body: body, operations: applied)
