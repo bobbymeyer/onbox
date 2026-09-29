@@ -1,9 +1,20 @@
 #!/usr/bin/env ruby
 # Stands in for the claude CLI in tests: reports what it was given.
 require "json"
-input = $stdin.read
-seen = { "args" => ARGV, "stdin" => input, "api_key" => ENV["ANTHROPIC_API_KEY"], "internal" => ENV["STACK_INTERNAL"], "cwd" => Dir.pwd }
-if ARGV.first == "auth"
+input = ARGV.first == "setup-token" ? "" : $stdin.read
+seen = { "args" => ARGV, "stdin" => input, "oauth_token" => ENV["CLAUDE_CODE_OAUTH_TOKEN"], "api_key" => ENV["ANTHROPIC_API_KEY"], "internal" => ENV["STACK_INTERNAL"], "cwd" => Dir.pwd }
+if ARGV.first == "setup-token"
+  url = "https://claude.com/cai/oauth/authorize?code=true&client_id=fake&state=xyz"
+  print "Welcome to Claude Code\r\n\e]8;;#{url}\e\\#{url}\e]8;;\e\\\r\nPaste code here if prompted > "
+  $stdout.flush
+  code = $stdin.gets.to_s.strip
+  if code == "good#xyz"
+    puts "\r\nYour OAuth token (valid for 1 year):\r\n\r\nsk-ant-oat01-#{"a" * 90}\r\n"
+  else
+    puts "\r\nOAuth error: Invalid code\r\n"
+    exit 1
+  end
+elsif ARGV.first == "auth"
   puts({ "loggedIn" => true, "authMethod" => "claude.ai", "subscriptionType" => "max", "email" => "bobby@example.com" }.to_json)
 elsif ENV["FAKE_CLAUDE_FAIL"]
   warn "Not logged in"

@@ -106,12 +106,67 @@ class SecretaryControllerTest < ActionDispatch::IntegrationTest
   test "shows tiers and the Claude login, and tests a tier" do
     with_env("STACK_SECRETARY" => "off", "STACK_SECRETARY_DEEP" => "claude_code", "STACK_CLAUDE_BIN" => FAKE_CLAUDE) do
       get secretary_url
-      assert_select ".maint-summary", /Signed in as bobby@example.com/
-      assert_match "max", response.body
+      assert_match "already signed in (claude.ai · max)", response.body
+      assert_select "button", "Connect Claude"
 
       post test_secretary_url(tier: "deep")
       follow_redirect!
       assert_select ".flash-notice", /Deep \(claude_code\) answered/
     end
+  end
+end
+
+class ClaudeLoginFlowTest < ActionDispatch::IntegrationTest
+  teardown { ClaudeLogin.cancel! }
+
+  test "connect Claude from the web: link, paste code, token stored and used" do
+    with_env("STACK_CLAUDE_BIN" => FAKE_CLAUDE) do
+      post connect_claude_url
+      follow_redirect!
+      assert_select "a.login-link[href=?]", "https://claude.com/cai/oauth/authorize?code=true&client_id=fake&state=xyz"
+
+      post claude_code_url, params: { code: "nope" }
+      follow_redirect!
+      assert_select ".flash-alert", /didn't accept that code/
+      assert_nil Credential.claude_token
+
+      post connect_claude_url
+      post claude_code_url, params: { code: " good#xyz " }
+      follow_redirect!
+      assert_select ".flash-notice", /Claude connected/
+      assert_select ".maint-summary", /Connected as bobby@example.com/
+
+      token = Credential.claude_token.secret
+      assert_match(/\Ask-ant-oat01-a{90}\z/, token)
+      assert_equal token, ClaudeCli.env["CLAUDE_CODE_OAUTH_TOKEN"], "handed to every claude run"
+      raw = Credential.connection.select_value("SELECT secret FROM credentials")
+      assert_not_includes raw, "sk-ant-oat01", "encrypted at rest"
+
+      delete disconnect_claude_url
+      assert_nil Credential.claude_token
+      assert_nil ClaudeCli.env["CLAUDE_CODE_OAUTH_TOKEN"]
+    end
+  end
+
+  test "a sign-in that can't start says why" do
+    with_env("STACK_CLAUDE_BIN" => "/nonexistent/claude") do
+      post connect_claude_url
+      follow_redirect!
+      assert_select ".flash-alert", /Couldn't start the Claude sign-in/
+    end
+  end
+
+  test "codes need a live sign-in; cancel keeps an existing token" do
+    Credential.store_claude_token!("sk-ant-oat01-existing")
+    post claude_code_url, params: { code: "good#xyz" }
+    follow_redirect!
+    assert_select ".flash-alert", /expired/
+
+    with_env("STACK_CLAUDE_BIN" => FAKE_CLAUDE) do
+      post connect_claude_url
+      post cancel_claude_url
+    end
+    assert_nil ClaudeLogin.current
+    assert_equal "sk-ant-oat01-existing", Credential.claude_token.secret
   end
 end

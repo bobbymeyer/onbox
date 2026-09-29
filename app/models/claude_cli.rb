@@ -1,8 +1,10 @@
 require "open3"
 
-# Every Claude call the stack makes goes through the official claude CLI,
-# signed in with Bobby's Claude account (Max plan): `claude auth login`, or
-# `claude setup-token` and CLAUDE_CODE_OAUTH_TOKEN for a background service.
+# Every Claude call the stack makes goes through the official claude CLI, on
+# Bobby's Claude account (Max plan). He connects it from /secretary, which
+# runs the CLI's own `claude setup-token` sign-in (see ClaudeLogin); the
+# resulting token is only ever handed to the CLI, as CLAUDE_CODE_OAUTH_TOKEN.
+# Without one, the CLI falls back to whatever login it already has.
 module ClaudeCli
   # An API key in the environment would make the CLI bill the API instead of
   # the subscription, so children never see one.
@@ -17,7 +19,9 @@ module ClaudeCli
   # internal: the secretary's own runs, which the stack hook ignores so they
   # never become cards.
   def env(internal: false)
-    STRIPPED.to_h { |key| [ key, nil ] }.merge("STACK_INTERNAL" => internal ? "1" : nil)
+    vars = STRIPPED.to_h { |key| [ key, nil ] }.merge("STACK_INTERNAL" => internal ? "1" : nil)
+    token = Credential.claude_token&.secret
+    token ? vars.merge("CLAUDE_CODE_OAUTH_TOKEN" => token) : vars
   end
 
   # A scratch directory for the secretary's runs, away from any project.

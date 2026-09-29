@@ -8,9 +8,42 @@ class SecretaryController < ApplicationController
   def show
     @tiers = { routine: Secretary.backend_name(:routine), deep: Secretary.backend_name(:deep) }
     in_use = @tiers.values
-    @claude = ClaudeCli.status if in_use.include?("claude_code") || params[:check] == "claude"
+    @claude = nil
+    @claude = ClaudeCli.status
     @local = Secretary::Backends::Local.status if in_use.include?("local")
     @api_key_in_env = ENV["ANTHROPIC_API_KEY"].present?
+    @credential = Credential.claude_token
+    @login = ClaudeLogin.current
+  end
+
+  # Connecting Claude from here: runs the CLI's own sign-in (ClaudeLogin).
+  def connect_claude
+    ClaudeLogin.start!
+    redirect_to secretary_path(anchor: "claude"), status: :see_other
+  rescue ClaudeLogin::Failed => e
+    redirect_to secretary_path(anchor: "claude"), alert: "Couldn't start the Claude sign-in: #{e.message}", status: :see_other
+  end
+
+  def claude_code
+    login = ClaudeLogin.current or return redirect_to(secretary_path(anchor: "claude"), alert: "That sign-in expired. Start again.", status: :see_other)
+    login.submit(params[:code])
+    status = ClaudeCli.status
+    redirect_to secretary_path(anchor: "claude"), status: :see_other,
+      notice: status["loggedIn"] ? "Claude connected. Replies and deep duties now run on your Claude plan." : "Token saved, but claude says it isn't signed in: #{status["error"]}"
+  rescue ClaudeLogin::Failed => e
+    redirect_to secretary_path(anchor: "claude"), alert: e.message, status: :see_other
+  end
+
+  def cancel_claude
+    ClaudeLogin.cancel!
+    redirect_to secretary_path(anchor: "claude"), status: :see_other
+  end
+
+  def disconnect_claude
+    ClaudeLogin.cancel!
+    Credential.claude_token&.destroy!
+    redirect_to secretary_path(anchor: "claude"), status: :see_other,
+      notice: "Disconnected. To revoke the token itself, remove it in your Claude account settings."
   end
 
   def test

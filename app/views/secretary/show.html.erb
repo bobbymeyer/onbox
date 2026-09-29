@@ -31,23 +31,47 @@
     </div>
   <% end %>
 
-  <h2>Claude</h2>
-  <div class="maint-card">
-    <p class="hint">Replies to Claude Code sessions<%= " and deep secretary duties" if @tiers.value?("claude_code") %> run through the <code>claude</code> CLI on your login, so they count against your Max plan.</p>
-    <% if @claude.nil? %>
-      <%= link_to "Check the Claude login", secretary_path(check: "claude") %>
-    <% elsif @claude["error"] %>
-      <p class="hint flash-alert">Couldn't run <code><%= ClaudeCli.bin %> auth status</code>: <%= @claude["error"] %></p>
-    <% elsif @claude["loggedIn"] %>
-      <p class="maint-summary">Signed in<%= " as #{@claude["email"]}" if @claude["email"].present? %></p>
+  <h2 id="claude">Claude</h2>
+  <div class="maint-card claude-login">
+    <p class="hint">Replies to Claude Code sessions<%= " and deep secretary duties" if @tiers.value?("claude_code") %> run through Claude Code on your Claude account, so they count against your Max plan.</p>
+
+    <% if @login %>
+      <ol class="login-steps">
+        <li>
+          <%= link_to "Sign in to Claude", @login.url, target: "_blank", rel: "noopener", class: "tool-send login-link" %>
+          <span class="hint">and approve access. Claude then shows you a code.</span>
+        </li>
+        <li>
+          <%= form_with url: claude_code_path, class: "stack-form inline-form" do |f| %>
+            <%= f.text_field :code, placeholder: "Paste the code", autocomplete: "off", required: true, aria: { label: "Code from Claude" } %>
+            <%= f.submit "Connect" %>
+          <% end %>
+        </li>
+      </ol>
+      <%= button_to "Cancel", cancel_claude_path, class: "defer-button" %>
+      <p class="hint">This runs Claude Code's own sign-in (<code>claude setup-token</code>) on the Mac; onbox only relays the link and your code. The link is good for ten minutes.</p>
+    <% elsif @credential %>
+      <p class="maint-summary">Connected<%= " as #{@claude["email"]}" if @claude && @claude["email"].present? %></p>
       <p class="hint">
-        <%= [ @claude["authMethod"], @claude["subscriptionType"], @claude["orgName"] ].compact_blank.join(" · ") %>
+        Long-lived Claude Code token from <%= @credential.created_at.to_fs(:short) %>; renew before <%= @credential.expires_at.to_date.to_fs(:long) %>.
+        <% if @claude && !@claude["error"] && !@claude["loggedIn"] %><span class="flash-alert">Claude Code no longer accepts it; reconnect.</span><% end %>
       </p>
+      <% if @credential.expires_at < 30.days.from_now %><p class="hint flash-alert">It expires soon. Reconnect to renew it.</p><% end %>
+      <div class="maint-actions">
+        <%= button_to "Reconnect", connect_claude_path %>
+        <%= button_to "Disconnect", disconnect_claude_path, method: :delete, class: "danger", data: { turbo_confirm: "Disconnect Claude? Replies to agents will stop until you reconnect." } %>
+      </div>
     <% else %>
-      <p class="hint flash-alert">Not signed in. On the Mac, run <code>claude auth login</code> and choose your Claude account.</p>
+      <% if @claude && @claude["loggedIn"] %>
+        <p class="hint">Claude Code on this Mac is already signed in (<%= [ @claude["authMethod"], @claude["subscriptionType"] ].compact_blank.join(" · ") %>), and onbox is using that. Connect here to give onbox its own login that works even when it runs as a background service.</p>
+      <% else %>
+        <p class="hint">Not connected.</p>
+      <% end %>
+      <%= button_to "Connect Claude", connect_claude_path, class: "tool-send" %>
     <% end %>
+
     <% if @api_key_in_env %>
-      <p class="hint">ANTHROPIC_API_KEY is set for this server. It is removed from every <code>claude</code> run so usage goes to your login, not the API.</p>
+      <p class="hint">ANTHROPIC_API_KEY is set for this server. It is removed from every Claude Code run so usage goes to your plan, not the API.</p>
     <% end %>
   </div>
 </main>

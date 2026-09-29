@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_29_015244) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_29_033505) do
   create_table "accountings", force: :cascade do |t|
     t.string "period", null: false
     t.datetime "starts_at", null: false
@@ -50,6 +50,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_29_015244) do
     t.index ["parent_card_id"], name: "index_cards_on_parent_card_id"
     t.index ["source_id"], name: "index_cards_on_source_id"
     t.index ["state", "position"], name: "index_cards_on_state_and_position"
+  end
+
+  create_table "credentials", force: :cascade do |t|
+    t.string "name", null: false
+    t.text "secret", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_credentials_on_name", unique: true
   end
 
   create_table "directives", force: :cascade do |t|

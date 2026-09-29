@@ -117,26 +117,29 @@ home screen for full screen.
 
 ### Claude login and the local secretary
 
-**Claude runs on your Max plan, through your login.** Everything Claude does
-for the stack goes through the official `claude` CLI signed in to your Claude
-account: replies to Claude Code sessions (`claude --resume … -p`), and the
-secretary's deeper duties. Sign in once on the Mac as the user that runs the
-server:
+**Claude runs on your Max plan, connected from onbox.** Everything Claude does
+for the stack goes through Claude Code on your Claude account: replies to Claude
+Code sessions (`claude --resume … -p`) and the secretary's deeper duties. Connect
+it from the web interface: `/secretary` → **Connect Claude** → **Sign in to
+Claude** (approve on claude.com; works from the phone) → paste the code Claude
+shows → **Connect**.
 
-```sh
-claude auth login          # choose your Claude (Max) account
-claude auth status         # should say you're signed in
-```
+Behind that button onbox runs Claude Code's own sign-in, `claude setup-token`,
+in a terminal on the Mac and relays the link and your code; it never talks to
+Claude's sign-in itself. Claude Code prints a long-lived token (inference only,
+valid one year), which onbox stores encrypted and hands only to the `claude` CLI,
+as `CLAUDE_CODE_OAUTH_TOKEN`. That works when the server runs as a background
+service, and leaves your own terminal login alone. `/secretary` shows when to
+renew; **Disconnect** removes it from onbox (revoke it in your Claude account
+settings too if you want it dead). Until you connect, onbox uses whatever
+login Claude Code on the Mac already has. The sign-in is held in the server
+process for ten minutes, so run a single Puma process (the default).
 
-If the server runs as a background service that can't read your login
-keychain, run `claude setup-token` and give the service the token as
-`CLAUDE_CODE_OAUTH_TOKEN`. Every `claude` run the stack starts has
-`ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` removed from its environment,
-because the CLI would otherwise bill an API key instead of your subscription.
-The secretary's own runs are marked `STACK_INTERNAL=1`, which `script/stack-hook`
-ignores, so they never come back as cards. (The stack never lifts your login
-token out of Claude Code to call the API directly: subscription login is only
-for Claude Code itself.)
+Every `claude` run the stack starts has `ANTHROPIC_API_KEY` and
+`ANTHROPIC_AUTH_TOKEN` removed from its environment, because the CLI would
+otherwise bill an API key instead of your subscription. The secretary's own
+runs are marked `STACK_INTERNAL=1`, which `script/stack-hook` ignores, so they
+never come back as cards.
 
 **The secretary is mostly local.** Its duties come in two tiers:
 
@@ -153,8 +156,7 @@ enough for fronts and deferrals. Set `STACK_SECRETARY_DEEP=local` to keep
 everything on the Mac.
 
 `/secretary` (linked from `/stack`) shows each tier's backend, whether Ollama
-and the model are ready, which account the `claude` CLI is signed in to, and a
-**Test** button per tier.
+and the model are ready, the Claude connection, and a **Test** button per tier.
 
 ### Environment
 
@@ -165,7 +167,6 @@ and the model are ready, which account the `claude` CLI is signed in to, and a
 | `STACK_LOCAL_MODEL` / `STACK_OLLAMA_URL` | `qwen3:30b` / `http://localhost:11434` | The local model |
 | `STACK_CLAUDE_BIN` | `claude` | Path to the claude CLI, if it isn't on the server's `PATH` |
 | `STACK_CLAUDE_MODEL` | CLI default | Model for the secretary's Claude runs (e.g. `opus`) |
-| `CLAUDE_CODE_OAUTH_TOKEN` | — | From `claude setup-token`, when the server can't read your login |
 | `ANTHROPIC_API_KEY` / `STACK_SECRETARY_MODEL` | — / `claude-opus-5-5` | Only for the `api` backend; never passed to `claude` |
 | `STACK_TIME_ZONE` | `UTC` | Where "tonight" and "tomorrow" resolve. Set this, e.g. `Pacific Time (US & Canada)` |
 | `STACK_AGENT_COMMAND` | `{claude} --resume {session_id} -p {instruction}` | How an instruction reaches a session. `{claude}`, `{session_id}`, `{instruction}`, `{cwd}` are substituted per argument (no shell). Runs in the session's cwd, on your Claude login |

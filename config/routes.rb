@@ -28,6 +28,10 @@ Rails.application.routes.draw do
   resources :directives, only: [ :create, :destroy ]
   get "secretary" => "secretary#show", as: :secretary
   post "secretary/test" => "secretary#test", as: :test_secretary
+  post "secretary/claude" => "secretary#connect_claude", as: :connect_claude
+  post "secretary/claude/code" => "secretary#claude_code", as: :claude_code
+  post "secretary/claude/cancel" => "secretary#cancel_claude", as: :cancel_claude
+  delete "secretary/claude" => "secretary#disconnect_claude", as: :disconnect_claude
   resources :digests, only: :index do
     post :catch_up, on: :collection
   end
