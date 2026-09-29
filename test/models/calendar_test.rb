@@ -175,3 +175,16 @@ class MacEventKitTest < ActiveSupport::TestCase
     end
   end
 end
+
+class MacPollJobTest < ActiveSupport::TestCase
+  test "says which sources it skipped because macOS hasn't allowed them" do
+    log = StringIO.new
+    original, Rails.logger = Rails.logger, ActiveSupport::Logger.new(log)
+    with_stub(MacEventKit, :available?, true) do
+      with_stub(MacEventKit, :granted?, false) { MacPollJob.perform_now }
+    end
+    assert_match "[mac] skipped calendar, reminders: not allowed in macOS", log.string
+  ensure
+    Rails.logger = original
+  end
+end

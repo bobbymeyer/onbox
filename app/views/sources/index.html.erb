@@ -51,6 +51,7 @@
         <details>
           <summary>Token</summary>
           <code class="token"><%= source.token %></code>
+          <%= button_to "Rotate", rotate_source_path(source), form_class: "inline-button", data: { turbo_confirm: "Replace #{source.name}'s token? The old one stops working now." } %>
         </details>
         <div class="maint-actions">
           <% if source.connected? %>

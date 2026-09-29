@@ -42,6 +42,7 @@ Rails.application.routes.draw do
       get :connect
       post :authorize
       post :allow
+      post :rotate
     end
     post :google_client, on: :collection
   end

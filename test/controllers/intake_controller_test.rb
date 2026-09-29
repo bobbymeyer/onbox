@@ -19,4 +19,15 @@ class IntakeControllerTest < ActionDispatch::IntegrationTest
     post intake_url(token: "printer-test-token"), params: { summary: "Print done" }, as: :json
     assert_response :accepted
   end
+
+  test "rotating a token retires the old one" do
+    source = sources(:printer)
+    post rotate_source_url(source)
+    assert_redirected_to sources_url
+
+    post intake_url(token: "printer-test-token"), params: { summary: "x" }, as: :json
+    assert_response :unauthorized
+    post intake_url(token: source.reload.token), params: { summary: "x" }, as: :json
+    assert_response :accepted
+  end
 end

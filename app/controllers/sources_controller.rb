@@ -84,6 +84,13 @@ class SourcesController < ApplicationController
     redirect_back_or_to sources_path, alert: e.message
   end
 
+  # A new token; the old one stops working at once.
+  def rotate
+    source = Source.find(params[:id])
+    source.regenerate_token
+    redirect_to sources_path, notice: "New token for #{source.name}. Update whatever sends to it."
+  end
+
   def destroy
     Source.find(params[:id]).destroy!
     redirect_to sources_path, notice: "Source deleted"

@@ -5,7 +5,10 @@ class MacPollJob < ApplicationJob
   def perform
     return unless MacEventKit.available?
 
-    Source.mac.select(&:connected?).each do |source|
+    connected, unconnected = Source.mac.partition(&:connected?)
+    Rails.logger.info("[mac] skipped #{unconnected.map(&:name).sort.join(", ")}: not allowed in macOS") if unconnected.any?
+
+    connected.each do |source|
       source.poll!
     rescue MacEventKit::Error => e
       Rails.logger.warn("[mac] #{source.name}: #{e.message}")
