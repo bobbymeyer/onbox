@@ -1,193 +1,92 @@
-# The Stack
+# onbox — The Stack
 
 The world is concurrent; Bobby's attention is single-threaded. The Stack is the
-serializer in between: everything pulling at him (Claude agents finishing, and
-email, calendar, reminders, and later a print completing) becomes one index card in front of him.
+serializer in between: everything pulling at him (Claude Code agents finishing,
+email, calendar invitations, reminders, anything else that can POST) becomes
+one index card in front of him, and a secretary decides which one.
 
-Rails 8, omakase: SQLite, Solid Queue / Cache / Cable, Hotwire, importmap, Propshaft.
+Rails 8, omakase: SQLite, Solid Queue / Cache / Cable, Hotwire, importmap,
+Propshaft. It runs natively on the Mac Studio and is reached from the phone
+over Tailscale.
 
-## What's built (v1 plan steps 1–7)
+## Sources
 
-| Step | Status |
-|---|---|
-| 1. Intake endpoint, Source and Card tables, phone dispenser | Done: `POST /intake`, dispenser at `/` |
-| 2. Claude Code as first source (Stop + Notification hooks) | Done: `script/stack-hook`. `claude agents --json` reconciliation not yet |
-| 3. Agent card type; handling sends the instruction back to the session | Done: `claude --resume <session> -p <instruction>` (configurable) |
-| 4. Secretary v0: one LLM call at intake writes summary, ask, proposed action | Done: `Secretary.digest`, in a background job, on a local model |
-| 5. Stamps: table, tray, PR-and-merge first | Done, with successors and repeats |
-| 6. Top-of-stack and later, with time triggers | Done, plus event triggers |
-| 7. Email as the second source and card type | Done: Gmail API polling, reply in thread, archive |
-| Calendar and Reminders (after v1) | Done, from the Mac's own apps: invitations with clashes, moved/cancelled heads-ups, "after my 3pm", due reminders and a Stack list |
-| 8. Maintenance view, decompose, noticer | Done |
-
-## The model
-
-- **Card**: position is height in the stack. New cards land on top and fall;
-  `Card.current` is the lowest live card that isn't blocked. State is `live`,
-  `held` (waiting on a trigger) or `handled`.
-- **Stamp**: a saved action. `action.kind` is `instruct` (send to the agent),
-  `reply`, or `handle` (just close it). `successors` are the cards it seeds,
-  chained so each waits on the one before it (`"parallel": true` opts out).
-  `action.repeat` (e.g. `"1 week"`) re-seeds the card, held until the next interval.
-  `requires_flip` keeps the stamp disabled until the card has been flipped.
-- **Trigger**: wakes a held card at a time, or when an incoming event carries a
-  matching key (`<source name>`, `<source name>:<event>`, `claude_code:stop:<project>`).
-- **Handling**: the event log of every gesture (stamp, reply, top_of_stack,
-  later, flip, release). The noticer and the secretary's accounting will read this.
-- **CardType** (`app/models/card_type.rb`): each type knows its inline tool
-  (`app/views/cards/types/_<name>.html.erb`) and how to deliver a reply. Add a
-  source by adding a card type.
-
-## Maintenance mode (`/stack`)
-
-The whole stack, front first. Per card: move up or down, to front, to top,
-decompose, edit. Tick cards for bulk actions from the bar at the bottom: later
-(one time for all), to front (keeping their order), to top, re-tag project,
-release, done, delete (asks first).
-
-**Talk to the secretary.** Ask why something sits where it does, or tell it
-to change things. It can move, hold, release and re-tag cards, and save or drop
-standing instructions; it cannot delete, handle or send anything, and every
-change it makes is listed under its reply. **Standing instructions** ("Hold
-receipts until 18:00") go into every digest, which can now also put a new card
-straight to the front or hold it.
-
-**Decompose** (on every card, and from the list) breaks a card into
-single-action cards. The secretary drafts the steps (a clarifying question
-first when the card is vague) and you edit them before anything is created.
-Each step waits on the one before it; the first goes to the front and the rest
-land on top and fall, so steps spread through the stack by dependency. Steps
-keep the original card's type and context, so an agent step's instruction still
-goes to that session.
-
-## The noticer
-
-It watches your free-text replies, per card type. When the same phrase
-comes up three times in 60 days (ignoring case, punctuation and "&" vs "and")
-and no stamp already covers it, an offer card lands in the stack: "You've
-typed "PR and merge" 3 times. Make it a stamp?" Its tool has the label and
-message pre-filled and editable. **Make it a stamp** casts a stamp that does
-what your reply did (an instruction on agent cards, a reply on email cards);
-**Not a stamp** declines, and a declined phrase is never offered again. Add
-successors to the new stamp on `/stamps`. The threshold is
-`STACK_NOTICER_THRESHOLD`.
-
-## The secretary's digests (`/digests`)
-
-Bobby only sees the card the secretary chose, so it owes a periodic
-accounting: what it held and why, what it put in front on its own judgment,
-what arrived and got handled, and what looks like drift (stale cards, the same
-card deferred again and again, a pile-up from one source, a rising flip rate).
-
-Digests are written every hour for the hour, day, week and month that just
-closed (calendar boundaries in `STACK_TIME_ZONE`, weeks from Monday). Each
-longer one is built from the shorter ones inside it plus the log, so a weekly
-reads its dailies rather than a week of raw events. The secretary's own moves
-(placements on arrival, changes asked for in maintenance) are logged, so they
-show up here. Without API access the digest is the plain numbers.
-
-**No activity, no report.** A period gets a digest only if you worked cards in
-it (stamped, replied, deferred, flipped, decomposed...). Cards arriving and the
-secretary's own moves don't count, so an idle hour, day or week writes nothing
-and costs no API call.
-
-Hourly digests stay on `/digests`. Daily, weekly and monthly ones also become a
-card to read and acknowledge. If you've touched a card in the last 30 minutes it
-lands right away, however late; otherwise it waits and drops in after your next
-gesture. The secretary also reads its latest digests when you talk to it.
-
-| Variable | Default | |
+| Source | How it arrives | What handling it does |
 |---|---|---|
-| `STACK_DIGEST_CARDS` | `daily,weekly,monthly` | Which periods become cards |
-| `STACK_ACTIVE_MINUTES` | `30` | How recently you must have worked a card to count as still working |
+| Claude Code | Stop and Notification hooks (`script/stack-hook`) | Sends your instruction back to the session (`claude --resume … -p`) on your Max plan |
+| Gmail | Polled every 2 minutes | Replies in the thread, or archives it |
+| Calendar (the Mac's) | Read every 2 minutes through EventKit | Invitations you answer in Calendar clear themselves; moves and cancellations are heads-ups |
+| Reminders (the Mac's) | Read every 2 minutes through EventKit | Done completes the reminder; Later moves its due time |
+| Anything else | `POST /intake` with a source token | Whatever the card says |
 
-**Catch up now** on `/digests` (or `bin/rails stack:digest`) writes anything due.
-Each run writes only the latest missed window per period, so the very first
-run can produce a daily, weekly and monthly digest at once.
-
-## Running it on the Mac Studio
+## Setting it up on the Mac
 
 ```sh
 bin/setup --skip-server
-bin/rails db:seed          # prints the claude-code source token
-bin/dev                    # or: RAILS_ENV=production bin/rails server
+bin/rails db:seed    # creates the sources and first stamps; prints the claude-code token
+bin/serve            # production mode, with the job scheduler, on port 3000
 ```
 
-Open `http://<mac-studio>.<tailnet>.ts.net:3000` on the phone. Add it to the
+`bin/serve` is how onbox should run: in production mode with Solid Queue inside
+the server, so polling, digests and timed wake-ups happen. It makes a
+`SECRET_KEY_BASE` once and keeps it in `storage/secret_key_base`; keep that file,
+since it encrypts the stored tokens. (`bin/dev` runs development mode, where the
+schedule doesn't run.)
+
+Reach it over Tailscale. With `tailscale serve --bg 3000` you get
+`https://<mac-studio>.<tailnet>.ts.net` and the defaults are right. For plain
+`http://<mac-studio>:3000`, set `STACK_FORCE_SSL=false`. Add it to the phone's
 home screen for full screen.
 
-### Claude login and the local secretary
+Calendar, Reminders and agent replies need the host's Calendar, Reminders and
+`claude` sessions, so run onbox natively rather than in the Docker image.
 
-**Claude runs on your Max plan, connected from onbox.** Everything Claude does
-for the stack goes through Claude Code on your Claude account: replies to Claude
-Code sessions (`claude --resume … -p`) and the secretary's deeper duties. Connect
-it from the web interface: `/secretary` → **Connect Claude** → **Sign in to
-Claude** (approve on claude.com; works from the phone) → paste the code Claude
-shows → **Connect**.
+### Claude: your login, your Max plan
 
-Behind that button onbox runs Claude Code's own sign-in, `claude setup-token`,
-in a terminal on the Mac and relays the link and your code; it never talks to
-Claude's sign-in itself. Claude Code prints a long-lived token (inference only,
-valid one year), which onbox stores encrypted and hands only to the `claude` CLI,
-as `CLAUDE_CODE_OAUTH_TOKEN`. That works when the server runs as a background
-service, and leaves your own terminal login alone. `/secretary` shows when to
-renew; **Disconnect** removes it from onbox (revoke it in your Claude account
-settings too if you want it dead). Until you connect, onbox uses whatever
-login Claude Code on the Mac already has. The sign-in is held in the server
-process for ten minutes, so run a single Puma process (the default).
+Everything Claude does for the stack goes through Claude Code on your Claude
+account: replies to agent sessions and the secretary's deeper duties. Connect it
+on `/secretary`: **Connect Claude** → **Sign in to Claude** (approve on
+claude.com; works from the phone) → paste the code Claude shows → **Connect**.
 
-Every `claude` run the stack starts has `ANTHROPIC_API_KEY` and
-`ANTHROPIC_AUTH_TOKEN` removed from its environment, because the CLI would
-otherwise bill an API key instead of your subscription. The secretary's own
-runs are marked `STACK_INTERNAL=1`, which `script/stack-hook` ignores, so they
-never come back as cards.
+Behind the button onbox runs Claude Code's own sign-in (`claude setup-token`) on
+the Mac and relays the link and your code; it never talks to Claude's sign-in
+itself. The long-lived token Claude Code prints (inference only, one year) is
+stored encrypted and handed only to the `claude` CLI as `CLAUDE_CODE_OAUTH_TOKEN`.
+`/secretary` shows when to renew. Until you connect, onbox uses whatever login
+Claude Code on the Mac already has. Every `claude` run the stack starts has
+`ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` removed, so usage lands on your
+subscription rather than an API key.
 
-**The secretary is mostly local.** Its duties come in two tiers:
+### The secretary: mostly local
+
+The secretary writes card fronts, resolves "later", places cards, drafts
+decompositions, talks with you in maintenance mode and writes digests. Its
+duties run in two tiers:
 
 | Tier | Duties | Setting | Default |
 |---|---|---|---|
-| routine | card fronts, "later", hourly and daily digests | `STACK_SECRETARY` | `local` (Ollama) |
+| routine | card fronts, "later", hourly and daily digests | `STACK_SECRETARY` | `local` |
 | deep | conversation, decompose, weekly and monthly digests | `STACK_SECRETARY_DEEP` | `claude_code` (your Max plan) |
 
-Each accepts `local`, `claude_code`, `api` (an Anthropic API key, billed to the
-API) or `off`. For local, install [Ollama](https://ollama.com), then
-`ollama pull qwen3:30b` (or set `STACK_LOCAL_MODEL` to a model you have). The
-reply is constrained to each duty's JSON schema, so a mid-sized local model is
-enough for fronts and deferrals. Set `STACK_SECRETARY_DEEP=local` to keep
-everything on the Mac.
+`local` is any OpenAI-compatible endpoint that supports a `json_schema`
+response format (llama-swap on the Mac Studio): set `STACK_SECRETARY_URL`
+(default `https://chat.bobbymeyer.com/v1`) and `STACK_SECRETARY_MODEL` to a model
+id from its `/v1/models`. Replies are constrained to each duty's schema. Either
+tier can also be `off`; set `STACK_SECRETARY_DEEP=local` to keep everything
+local. When a tier is off or its model fails, every duty falls back: cards keep
+the intake's plain front, "later" uses the built-in phrase parser, digests are
+the plain numbers.
 
-`/secretary` (linked from `/stack`) shows each tier's backend, whether Ollama
-and the model are ready, the Claude connection, and a **Test** button per tier.
+`/secretary` shows each tier's backend, whether the endpoint and model are
+ready, the Claude connection, and a **Test** button per tier.
 
-### Environment
-
-| Variable | Default | What it does |
-|---|---|---|
-| `STACK_SECRETARY` | `local` | Backend for routine duties: `local`, `claude_code`, `api`, `off` |
-| `STACK_SECRETARY_DEEP` | `claude_code` | Backend for deep duties |
-| `STACK_LOCAL_MODEL` / `STACK_OLLAMA_URL` | `qwen3:30b` / `http://localhost:11434` | The local model |
-| `STACK_CLAUDE_BIN` | `claude` | Path to the claude CLI, if it isn't on the server's `PATH` |
-| `STACK_CLAUDE_MODEL` | CLI default | Model for the secretary's Claude runs (e.g. `opus`) |
-| `ANTHROPIC_API_KEY` / `STACK_SECRETARY_MODEL` | — / `claude-opus-5-5` | Only for the `api` backend; never passed to `claude` |
-| `STACK_TIME_ZONE` | `UTC` | Where "tonight" and "tomorrow" resolve. Set this, e.g. `Pacific Time (US & Canada)` |
-| `STACK_AGENT_COMMAND` | `{claude} --resume {session_id} -p {instruction}` | How an instruction reaches a session. `{claude}`, `{session_id}`, `{instruction}`, `{cwd}` are substituted per argument (no shell). Runs in the session's cwd, on your Claude login |
-| `STACK_PASSWORD` / `STACK_USER` | unset / `bobby` | Optional HTTP basic auth on the views. Tailscale is the main perimeter |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth client for Gmail, if not entered on `/sources` (`GMAIL_CLIENT_*` still work) |
-| `STACK_REMINDERS_LIST` | `Stack` | Reminders list that lands in the stack whole (also settable on `/sources`) |
-
-With the `api` backend, the secretary enables server-side refusal fallbacks
-(`fallbacks: :default`), so a declined request is retried on another model.
-
-Held cards wake when a page loads, and every minute through the Solid Queue
-recurring job (`config/recurring.yml`, production).
-
-### Wiring Claude Code
+### Claude Code hooks
 
 Add the hooks to `~/.claude/settings.json` (see `script/claude-settings.example.json`):
 
 ```json
 {
-  "env": { "STACK_URL": "http://mac-studio:3000", "STACK_TOKEN": "<claude-code token>" },
+  "env": { "STACK_URL": "https://mac-studio.<tailnet>.ts.net", "STACK_TOKEN": "<claude-code token>" },
   "hooks": {
     "Stop":         [{ "hooks": [{ "type": "command", "command": "/path/to/onbox/script/stack-hook" }] }],
     "Notification": [{ "hooks": [{ "type": "command", "command": "/path/to/onbox/script/stack-hook" }] }]
@@ -195,91 +94,62 @@ Add the hooks to `~/.claude/settings.json` (see `script/claude-settings.example.
 }
 ```
 
-The hook sends its JSON input untouched and never blocks or fails the agent's
-turn. `session_id` is the card's key, so a session holds one open card at a
-time; a new Stop refreshes it and puts it back on top. When the hook input has
-no last assistant message, the intake reads it from `transcript_path`, which
-works because the server and the agents share a machine.
+The hook POSTs its JSON input untouched and never blocks or fails the agent's
+turn. `session_id` is the card's key, so a session holds one open card; a new
+Stop refreshes it and puts it back on top. When the hook input has no last
+assistant message, the intake reads it from `transcript_path`. When you send an
+instruction, the next Stop brings the result back as a fresh card; a failed send
+comes back as a card too. The secretary's own `claude` runs are marked
+`STACK_INTERNAL=1`, which the hook ignores.
 
-When you send an instruction, the next Stop hook brings the result back as a
-fresh card. If the send fails, the failure comes back as a card.
-
-### Wiring Gmail
-
-Email cards come from polling Gmail every two minutes. Each thread holds one
-open card: sender and subject on the front, the secretary's drafted reply as
-the proposed action, the full message on the back. **Send reply** (or the
-**Approve** stamp) replies in the thread; the **Archive** stamp archives it.
-
-One-time setup, all in the web interface:
+### Gmail
 
 1. In Google Cloud Console, create a project, enable the **Gmail API**, and
-   create an OAuth client of type **Desktop app**.
-   If the consent screen is in testing mode, add your address as a test user.
-   (Testing-mode refresh tokens expire after 7 days; publish the app, still
-   unverified, to keep them.)
+   create an OAuth client of type **Desktop app**. If the consent screen is in
+   testing mode, add yourself as a test user (testing-mode tokens expire after
+   7 days; publish the app, still unverified, to keep them).
 2. On `/sources`, paste the client ID and secret under **Google** (stored
    encrypted; or set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`).
-3. On the source, **Connect** → **Sign in with Google** → allow. Google then
-   sends the browser to a `localhost` address that won't load; copy that
-   address from the address bar, paste it into onbox, **Connect**. Works from
-   the phone. (`bin/rails gmail:connect[gmail]` does the same from a terminal.)
+3. On the `gmail` source, **Connect** → **Sign in with Google** → allow. Google
+   then sends the browser to a `localhost` address that won't load; copy that
+   address, paste it into onbox, **Connect**. (`bin/rails gmail:connect[gmail]`
+   does the same from a terminal.)
 
-The scope is `gmail.modify` (read, send, label and archive; no permanent delete). The refresh token
-is stored encrypted in the `sources` table. Which mail becomes a card is a
-Gmail search, `in:inbox category:primary` by default, editable on `/sources`,
-where **Check now** also polls on demand. Each poll takes at most 25 messages,
-and the first one looks back one day.
+Each thread holds one open card: sender and subject on the front, the
+secretary's drafted reply as the proposed action, the message on the back.
+**Send reply** (or **Approve**) replies in the thread; **Archive** archives it.
+The scope is `gmail.modify` (no permanent delete). Which mail becomes a card is
+a Gmail search, `in:inbox category:primary` by default, editable on `/sources`.
+Mail from someone emits `gmail:from:<address>`, so "later, until Ada replies"
+wakes the card when she does.
 
-Mail from someone emits the event `gmail:from:<address>`, so a card can be held
-until they write back: on an email card, **Later** with "until Ada replies" is
-resolved by the secretary to that event key.
-
-Other mail bridges can POST the same shape to `/intake` on an email source:
-`thread_id`, `message_id`, `from`, `reply_to`, `subject`, `body`,
-`rfc822_message_id`, `references`.
-
-### Calendar and Reminders (the Mac's own apps)
+### Calendar and Reminders
 
 onbox reads the Mac's Calendar (which already syncs your Google calendars) and
-Reminders directly, through a small Swift helper using Apple's EventKit
-(`script/eventkit/`). No Google sign-in is involved. onbox builds the helper
-the first time it's needed, so the Mac needs the Xcode command line tools
-(`xcode-select --install`). Both are polled every two minutes.
-
-Setup: on `/sources`, tap **Allow access** on the `calendar` and `reminders`
-sources (seeded). macOS asks on the Mac's screen; click Allow there. If the
-prompt never appears (a server started by launchd can't show one), run
+Reminders through a small Swift helper using EventKit (`script/eventkit/`). It
+builds the helper on first use, so the Mac needs the Xcode command line tools
+(`xcode-select --install`). On `/sources`, tap **Allow access** on the
+`calendar` and `reminders` sources and click Allow in the macOS prompt. If no
+prompt appears (a server started by launchd can't show one), run
 `tmp/bin/onbox-eventkit request` once in Terminal, or allow it in System
-Settings → Privacy & Security → Calendars / Reminders.
+Settings → Privacy & Security.
 
-**Calendar** makes three kinds of card:
+**Calendar** makes a decision card for each invitation you haven't answered (one
+per series), with when, where, any clash with a meeting you're going to, and the
+secretary's advice. Apple offers no way for an app to answer an invitation, so
+you answer in Calendar and the card clears itself once that syncs. Meetings you
+were going to that move or are cancelled become heads-ups. "Later … after my
+3pm" wakes the card when that meeting ends.
 
-- **Invitations you haven't answered** — a decision card per event (one per
-  series) with when, where, and any clash with a meeting you're going to, plus
-  the secretary's advice. Apple offers no way for an app to answer an
-  invitation, so you answer in Calendar (on the Mac or phone); the card clears
-  itself once your answer syncs back.
-- **Moved** and **cancelled** (or removed) meetings you were going to, as
-  heads-ups to acknowledge. It remembers your upcoming meetings between polls
-  to tell.
+**Reminders** become cards when they come due, from any list, and everything in
+the **Stack** list becomes a card at once, so "Hey Siri, add renew passport to
+Stack" lands in front of you. **Done** completes the reminder, **Later** moves
+its due time, completing it in Reminders clears the card. The list name is
+editable on `/sources`.
 
-Your own events, invites you've answered, and past events stay out. When you
-tap **Later** with something like "after my 3pm" or "after standup", the
-secretary reads today's and tomorrow's calendar and wakes the card when that
-meeting ends.
+### Anything else
 
-**Reminders** become cards when they come due, from any list, and everything
-in the **Stack** list becomes a card straight away, so "Hey Siri, add renew
-passport to Stack" lands in front of you. **Done** completes the reminder;
-**Later** moves its due time to when the card comes back; completing it in
-Reminders clears the card. Decomposing a reminder makes plain cards, so
-finishing a step doesn't complete the whole reminder. Change the list name on
-`/sources`.
-
-### Other sources
-
-Create a `generic` source at `/sources` and POST JSON:
+Create a `generic` source on `/sources` and POST JSON:
 
 ```sh
 curl -X POST "$STACK_URL/intake" -H "Authorization: Bearer $TOKEN" \
@@ -288,35 +158,97 @@ curl -X POST "$STACK_URL/intake" -H "Authorization: Bearer $TOKEN" \
 ```
 
 Fields: `summary`, `project`, `ask` (decision / reply / review / acknowledge),
-`proposed_action`, `body`, `key` (dedupes open cards), `event` (wakes cards
-held on `<source>:<event>`). Senders that can't set headers can pass `?token=`.
+`proposed_action`, `body`, `key` (dedupes open cards), `event` (wakes cards held
+on `<source>:<event>`). Senders that can't set headers can pass `?token=`.
+
+## Using it
+
+**The dispenser (`/`)** shows one card, full screen, with no count. Its front
+has the source, project, age, summary, the ask, and the secretary's proposed
+action. Below that: the stamp tray, the card's own tool (instruction, reply,
+note), **Flip** for the full payload, and **Top of the stack** / **Later**.
+
+- **Stamps** apply a saved action in one tap. A stamp can send a templated
+  message (`{{project}}`, `{{summary}}`), seed successor cards that wait on each
+  other, repeat on an interval, and require a flip first for anything
+  irreversible. Manage them on `/stamps`.
+- **Top of the stack** puts the card back to fall again; **Later** holds it
+  until a time ("2h", "tonight", "friday", "after my 3pm") or an event.
+- **Decompose** breaks a card into single-action cards. The secretary drafts
+  the steps and you edit them; each waits on the one before, the first goes to
+  the front and the rest land on top.
+- **The noticer** watches your free-text replies. A phrase typed three times in
+  60 days that no stamp covers becomes an offer card: make it a stamp, or don't
+  (`STACK_NOTICER_THRESHOLD`).
+
+**Maintenance mode (`/stack`)** shows the whole stack. Move cards, edit,
+decompose, and act on a selection in bulk (later, to front, to top, re-tag,
+release, done, delete). **Talk to the secretary** there: ask why a card sits
+where it does, or have it move, hold, release and re-tag cards. It can't delete,
+handle or send anything, and it lists every change it makes. **Standing
+instructions** ("hold receipts until 18:00") apply to every new card.
+
+**Digests (`/digests`)** are the secretary's accounting: what it held and why,
+what it put in front, what came and went, and drift (stale cards, repeated
+deferrals, a rising flip rate). They're written for each hour, day, week and
+month in which you worked cards, each built from the shorter ones inside it.
+Daily and longer ones also become a card: right away if you're still working,
+otherwise after your next gesture. Idle periods get nothing.
+
+## Environment
+
+| Variable | Default | What it does |
+|---|---|---|
+| `STACK_TIME_ZONE` | `UTC` | Where "tonight" and digest days resolve, e.g. `Pacific Time (US & Canada)` |
+| `STACK_FORCE_SSL` | `true` | `false` to serve plain HTTP over the tailnet |
+| `STACK_PASSWORD` / `STACK_USER` | unset / `bobby` | Optional HTTP basic auth on the views; Tailscale is the main perimeter |
+| `STACK_SECRETARY` / `STACK_SECRETARY_DEEP` | `local` / `claude_code` | Backend per tier: `local`, `claude_code`, `off` |
+| `STACK_SECRETARY_URL` / `STACK_SECRETARY_MODEL` | `https://chat.bobbymeyer.com/v1` / — | The local, OpenAI-compatible model |
+| `STACK_CLAUDE_BIN` / `STACK_CLAUDE_MODEL` | `claude` / CLI default | The claude CLI, and the model for the secretary's Claude runs |
+| `STACK_AGENT_COMMAND` | `{claude} --resume {session_id} -p {instruction}` | How an instruction reaches a session; placeholders are substituted per argument, never through a shell |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Gmail's OAuth client, if not entered on `/sources` |
+| `STACK_REMINDERS_LIST` | `Stack` | Reminders list that lands whole (also on `/sources`) |
+| `STACK_DIGEST_CARDS` | `daily,weekly,monthly` | Which digests become cards |
+| `STACK_ACTIVE_MINUTES` | `30` | How recently you must have worked a card to count as still working |
+| `STACK_NOTICER_THRESHOLD` | `3` | Repeats before the noticer offers a stamp |
+
+## How it's built
+
+- **Card**: position is height in the stack; new cards land on top and fall,
+  and `Card.current` is the lowest live card that isn't blocked. State is
+  `live`, `held` (waiting on a Trigger) or `handled`.
+- **CardType** (`app/models/card_type.rb`): each type has its tool
+  (`app/views/cards/types/_<name>.html.erb`) and carries out its actions
+  (`perform`). A new source is a normalizer in `app/models/intake/` plus a card
+  type.
+- **Stamp**: a saved action with a template, successors and repeat.
+- **Trigger**: wakes a held card at a time or on a matching event key.
+- **Handling**: the log of every gesture, and of the secretary's own moves. The
+  noticer and the digests read it.
+- **Secretary** (`app/models/secretary.rb`): schemas and prompts per duty,
+  routed to a backend by tier (`app/models/secretary/backends/`).
+- Intake is one endpoint (`IntakeController`); pollers (`Gmail::Sync`,
+  `MacCalendar::Sync`, `MacReminders::Sync`) feed the same `Intake.receive`.
 
 ## Known gaps
 
-- `claude -p --resume` can't answer a permission prompt. A Notification card
-  asking for permission can only be handled by instruction or by going to the
-  terminal. A tmux `send-keys` command is the likely fix
-  (`STACK_AGENT_COMMAND="tmux send-keys -t {session_id} {instruction} Enter"`
-  with sessions named to match).
-- If the interactive session is still open in a terminal, `--resume` continues
-  it in a separate headless process.
-- There is no `claude agents --json` reconciliation yet, so a card for a session
-  you already answered at the terminal stays until its next Stop refreshes it.
-- Email is polled, not pushed. Gmail push via Pub/Sub needs a public URL
-  (e.g. Tailscale Funnel); when there is one, the push endpoint can call the
-  same `Gmail::Sync`.
-- Sending a reply is one tap. If that proves too easy for an irreversible
-  action, the per-stamp `requires_flip` flag is the lever.
-- The secretary only places a card when it arrives (or when asked); it doesn't
-  yet re-judge the whole order as things change.
-- The noticer matches phrases exactly after normalizing; it won't yet see
-  that "PR and merge" and "open a PR then merge" are the same request.
-- Calendar can't answer invitations (Apple has no API for it), and
-  Calendar and Reminders need onbox to run on the Mac.
-- Not built yet: noticing when grooming time outruns handling time.
+- `claude -p --resume` can't answer a permission prompt, and if the session is
+  still open in a terminal it continues in a separate headless process. A tmux
+  `send-keys` command via `STACK_AGENT_COMMAND` is the likely fix.
+- No `claude agents --json` reconciliation yet: a card for a session you
+  answered at the terminal stays until its next Stop.
+- Gmail is polled, not pushed (push needs a public URL).
+- Invitations can't be answered from onbox (Apple has no API for it).
+- The secretary places a card when it arrives or when asked; it doesn't yet
+  re-judge the whole order as things change.
+- The noticer matches phrases exactly after normalizing, so it won't see that
+  "PR and merge" and "open a PR then merge" are the same request.
+- Not built: noticing when grooming time outruns handling time.
 
-## Tests
+## Development
 
 ```sh
-bin/rails test && bin/rubocop && bin/brakeman
+bin/rails test              # unit and integration
+bin/rails test:system       # the phone flow in headless Chrome
+bin/rubocop && bin/brakeman
 ```

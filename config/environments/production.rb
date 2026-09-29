@@ -25,10 +25,13 @@ Rails.application.configure do
   config.active_storage.service = :local
 
   # Assume all access to the app is happening through a SSL-terminating reverse proxy.
-  config.assume_ssl = true
+  # onbox is reached over the tailnet. Behind `tailscale serve` (HTTPS) keep
+  # the default; for plain http://mac-studio:3000 set STACK_FORCE_SSL=false.
+  https = ENV.fetch("STACK_FORCE_SSL", "true") != "false"
+  config.assume_ssl = https
 
   # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
-  config.force_ssl = true
+  config.force_ssl = https
 
   # Skip http-to-https redirect for the default health check endpoint.
   # config.ssl_options = { redirect: { exclude: ->(request) { request.path == "/up" } } }

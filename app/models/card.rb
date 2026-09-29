@@ -41,16 +41,8 @@ class Card < ApplicationRecord
     CardType.for(card_type)
   end
 
-  def age
-    created_at
-  end
-
   def blocked?
     blocked_by.present? && !blocked_by.handled?
-  end
-
-  def pending_trigger
-    triggers.pending.order(:fires_at).first
   end
 
   # Maintenance: shift one place toward the front (:forward) or back (:back)
