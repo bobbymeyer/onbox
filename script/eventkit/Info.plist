@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>com.bobbymeyer.onbox.eventkit</string>
+  <key>CFBundleName</key>
+  <string>onbox</string>
+  <key>NSCalendarsUsageDescription</key>
+  <string>onbox turns calendar invitations and changes into cards.</string>
+  <key>NSCalendarsFullAccessUsageDescription</key>
+  <string>onbox turns calendar invitations and changes into cards.</string>
+  <key>NSRemindersUsageDescription</key>
+  <string>onbox turns due reminders into cards and completes them when you're done.</string>
+  <key>NSRemindersFullAccessUsageDescription</key>
+  <string>onbox turns due reminders into cards and completes them when you're done.</string>
+</dict>
+</plist>

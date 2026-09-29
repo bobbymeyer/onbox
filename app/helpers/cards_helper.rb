@@ -24,13 +24,5 @@ module CardsHelper
     card.payload["body"].presence || card.payload["last_assistant_message"].presence
   end
 
-  RSVP_ORDER = %w[accept tentative decline].freeze
-
-  # The Accept / Maybe / Decline stamps, in that order.
-  def calendar_stamps
-    Stamp.where(card_type: "calendar").select { |s| RSVP_ORDER.include?(s.action_kind) }
-      .sort_by { |s| RSVP_ORDER.index(s.action_kind) }
-  end
-
   LATER_CHOICES = [ "1 hour", "this afternoon", "tonight", "tomorrow", "next week" ].freeze
 end

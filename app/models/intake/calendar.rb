@@ -1,5 +1,5 @@
 module Intake
-  # One calendar change, already flattened (see GoogleCalendar::Sync).
+  # One calendar change from the Mac's Calendar (see MacCalendar::Sync).
   module Calendar
     LABELS = { "moved" => "Moved", "cancelled" => "Cancelled" }.freeze
 

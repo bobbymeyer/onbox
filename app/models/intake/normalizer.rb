@@ -5,6 +5,7 @@ module Intake
       when "claude_code" then ClaudeCode
       when "email" then Email
       when "calendar" then Calendar
+      when "reminders" then Reminder
       else Generic
       end
     end

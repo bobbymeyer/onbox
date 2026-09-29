@@ -23,3 +23,10 @@ calendar:
   card_type: calendar
   token: calendar-test-token
   settings: {}
+
+reminders:
+  name: reminders
+  kind: reminders
+  card_type: reminder
+  token: reminders-test-token
+  settings: {}

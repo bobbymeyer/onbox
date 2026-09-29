@@ -93,20 +93,27 @@ class ActiveSupport::TestCase
       "updated" => "2026-09-29T10:00:00Z", "summary" => "Design review",
       "start" => Time.zone.local(2026, 10, 1, 15).iso8601, "end" => Time.zone.local(2026, 10, 1, 16).iso8601,
       "all_day" => false, "location" => "Room 4", "organizer" => "Ada Lovelace", "organizer_self" => false,
-      "attendees" => [], "self_response" => "needsAction", "html_link" => "https://calendar.google.com/event?eid=ev1"
+      "attendees" => [ { "name" => "Ada Lovelace", "response" => "accepted" } ], "self_response" => "pending"
     }.merge(overrides.stringify_keys)
   end
 
-  # Stands in for GoogleCalendar::Calendar.
-  class FakeCalendar
-    attr_reader :responses
+  # Stands in for MacEventKit: canned events and reminders, and a log of calls.
+  class FakeKit
+    attr_accessor :events_list, :reminders_list
+    attr_reader :calls
 
-    def initialize(changed: [], agenda: [])
-      @changed, @agenda, @responses = changed, agenda, []
+    def initialize(events: [], reminders: [])
+      @events_list, @reminders_list, @calls = events, reminders, []
     end
 
-    def changed(since:) = @changed
-    def agenda(from:, to:) = @agenda
-    def respond(payload, kind, note = nil) = @responses << [ payload["series_id"], kind, note ]
+    def events(from:, to:) = @events_list
+    def reminders = @reminders_list
+    def complete(id) = @calls << [ :complete, id ]
+    def reschedule(id, time) = @calls << [ :reschedule, id, time ]
+  end
+
+  def reminder(**overrides)
+    { "reminder_id" => "r1", "title" => "Renew passport", "notes" => nil, "list" => "Personal",
+      "due" => nil, "all_day_due" => false, "priority" => 0, "url" => nil }.merge(overrides.stringify_keys)
   end
 end

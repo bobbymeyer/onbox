@@ -2,7 +2,7 @@
 
 The world is concurrent; Bobby's attention is single-threaded. The Stack is the
 serializer in between: everything pulling at him (Claude agents finishing, and
-email, calendar, and later a print completing) becomes one index card in front of him.
+email, calendar, reminders, and later a print completing) becomes one index card in front of him.
 
 Rails 8, omakase: SQLite, Solid Queue / Cache / Cable, Hotwire, importmap, Propshaft.
 
@@ -17,7 +17,7 @@ Rails 8, omakase: SQLite, Solid Queue / Cache / Cable, Hotwire, importmap, Props
 | 5. Stamps: table, tray, PR-and-merge first | Done, with successors and repeats |
 | 6. Top-of-stack and later, with time triggers | Done, plus event triggers |
 | 7. Email as the second source and card type | Done: Gmail API polling, reply in thread, archive |
-| Calendar (after v1) | Done: invitations with clashes and one-tap RSVP, moved/cancelled heads-ups, "after my 3pm" |
+| Calendar and Reminders (after v1) | Done, from the Mac's own apps: invitations with clashes, moved/cancelled heads-ups, "after my 3pm", due reminders and a Stack list |
 | 8. Maintenance view, decompose, noticer | Done |
 
 ## The model
@@ -172,7 +172,8 @@ and the model are ready, the Claude connection, and a **Test** button per tier.
 | `STACK_TIME_ZONE` | `UTC` | Where "tonight" and "tomorrow" resolve. Set this, e.g. `Pacific Time (US & Canada)` |
 | `STACK_AGENT_COMMAND` | `{claude} --resume {session_id} -p {instruction}` | How an instruction reaches a session. `{claude}`, `{session_id}`, `{instruction}`, `{cwd}` are substituted per argument (no shell). Runs in the session's cwd, on your Claude login |
 | `STACK_PASSWORD` / `STACK_USER` | unset / `bobby` | Optional HTTP basic auth on the views. Tailscale is the main perimeter |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth client for Gmail and Calendar, if not entered on `/sources` (`GMAIL_CLIENT_*` still work) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth client for Gmail, if not entered on `/sources` (`GMAIL_CLIENT_*` still work) |
+| `STACK_REMINDERS_LIST` | `Stack` | Reminders list that lands in the stack whole (also settable on `/sources`) |
 
 With the `api` backend, the secretary enables server-side refusal fallbacks
 (`fallbacks: :default`), so a declined request is retried on another model.
@@ -210,10 +211,10 @@ open card: sender and subject on the front, the secretary's drafted reply as
 the proposed action, the full message on the back. **Send reply** (or the
 **Approve** stamp) replies in the thread; the **Archive** stamp archives it.
 
-One-time setup, all in the web interface (Gmail and Calendar share it):
+One-time setup, all in the web interface:
 
-1. In Google Cloud Console, create a project, enable the **Gmail API** and the
-   **Google Calendar API**, and create an OAuth client of type **Desktop app**.
+1. In Google Cloud Console, create a project, enable the **Gmail API**, and
+   create an OAuth client of type **Desktop app**.
    If the consent screen is in testing mode, add your address as a test user.
    (Testing-mode refresh tokens expire after 7 days; publish the app, still
    unverified, to keep them.)
@@ -238,25 +239,43 @@ Other mail bridges can POST the same shape to `/intake` on an email source:
 `thread_id`, `message_id`, `from`, `reply_to`, `subject`, `body`,
 `rfc822_message_id`, `references`.
 
-### Wiring Google Calendar
+### Calendar and Reminders (the Mac's own apps)
 
-The `calendar` source (seeded) polls your primary calendar every five minutes.
-Connect it on `/sources` the same way as Gmail; its scope is `calendar.events`
-(read events, answer invitations). Three things become cards:
+onbox reads the Mac's Calendar (which already syncs your Google calendars) and
+Reminders directly, through a small Swift helper using Apple's EventKit
+(`script/eventkit/`). No Google sign-in is involved. onbox builds the helper
+the first time it's needed, so the Mac needs the Xcode command line tools
+(`xcode-select --install`). Both are polled every two minutes.
+
+Setup: on `/sources`, tap **Allow access** on the `calendar` and `reminders`
+sources (seeded). macOS asks on the Mac's screen; click Allow there. If the
+prompt never appears (a server started by launchd can't show one), run
+`tmp/bin/onbox-eventkit request` once in Terminal, or allow it in System
+Settings → Privacy & Security → Calendars / Reminders.
+
+**Calendar** makes three kinds of card:
 
 - **Invitations you haven't answered** — a decision card per event (one per
-  series for recurring invites) with when, where, links, and any clash with a
-  meeting you're going to. The secretary recommends Accept, Maybe or Decline
-  (marked on the card) with a one-line reason. The buttons RSVP in Google
-  Calendar for the whole series and notify the organizer; type a note first to
-  send it along. The secretary's advice is never sent as the note.
-- **Moved** and **cancelled** meetings you were going to, as heads-ups to
-  acknowledge. (It remembers your upcoming meetings between polls to tell.)
+  series) with when, where, and any clash with a meeting you're going to, plus
+  the secretary's advice. Apple offers no way for an app to answer an
+  invitation, so you answer in Calendar (on the Mac or phone); the card clears
+  itself once your answer syncs back.
+- **Moved** and **cancelled** (or removed) meetings you were going to, as
+  heads-ups to acknowledge. It remembers your upcoming meetings between polls
+  to tell.
 
-Your own events, invites you've already answered, and past events stay out.
-When you tap **Later** with something like "after my 3pm" or "after standup",
-the secretary reads today's and tomorrow's calendar and wakes the card when
-that meeting ends.
+Your own events, invites you've answered, and past events stay out. When you
+tap **Later** with something like "after my 3pm" or "after standup", the
+secretary reads today's and tomorrow's calendar and wakes the card when that
+meeting ends.
+
+**Reminders** become cards when they come due, from any list, and everything
+in the **Stack** list becomes a card straight away, so "Hey Siri, add renew
+passport to Stack" lands in front of you. **Done** completes the reminder;
+**Later** moves its due time to when the card comes back; completing it in
+Reminders clears the card. Decomposing a reminder makes plain cards, so
+finishing a step doesn't complete the whole reminder. Change the list name on
+`/sources`.
 
 ### Other sources
 
@@ -292,8 +311,8 @@ held on `<source>:<event>`). Senders that can't set headers can pass `?token=`.
   yet re-judge the whole order as things change.
 - The noticer matches phrases exactly after normalizing; it won't yet see
   that "PR and merge" and "open a PR then merge" are the same request.
-- Calendar is polled, not pushed (push channels need a public HTTPS URL),
-  and only the primary calendar is read.
+- Calendar can't answer invitations (Apple has no API for it), and
+  Calendar and Reminders need onbox to run on the Mac.
 - Not built yet: noticing when grooming time outruns handling time.
 
 ## Tests

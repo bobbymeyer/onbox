@@ -1,133 +1,177 @@
 require "test_helper"
 
 class CalendarTest < ActiveSupport::TestCase
-  include ActiveJob::TestHelper
-
   NOW = Time.zone.local(2026, 9, 29, 10)
-  G = Google::Apis::CalendarV3
 
-  def sync(changed: [], agenda: [], now: NOW)
-    source = connect(sources(:calendar))
-    travel_to(now) { GoogleCalendar::Sync.call(source, calendar: FakeCalendar.new(changed: changed, agenda: agenda), now: now) }
+  def sync(events, now: NOW)
+    travel_to(now) { MacCalendar::Sync.call(sources(:calendar), kit: FakeKit.new(events: events), now: now) }
   end
 
-  test "normalizes timed, all-day and recurring events, and finds Bobby on the guest list" do
-    me = G::EventAttendee.new(email: "bobby@x.com", self: true, response_status: "needsAction")
-    timed = G::Event.new(id: "ev1_20261001", recurring_event_id: "ev1", summary: "Standup", status: "confirmed",
-                         start: G::EventDateTime.new(date_time: DateTime.new(2026, 10, 1, 9)),
-                         end: G::EventDateTime.new(date_time: DateTime.new(2026, 10, 1, 9, 15)),
-                         organizer: G::Event::Organizer.new(display_name: "Ada"), attendees: [ me ],
-                         description: "<b>Agenda</b> inside")
-    n = GoogleCalendar::Event.normalize(timed)
-    assert_equal [ "ev1", true, "needsAction", "Ada", false, "Agenda inside" ],
-                 n.values_at("series_id", "recurring", "self_response", "organizer", "all_day", "description")
+  def going(**overrides) = calendar_event(self_response: "accepted", **overrides)
 
-    all_day = G::Event.new(id: "hol", start: G::EventDateTime.new(date: "2026-10-02"), end: G::EventDateTime.new(date: "2026-10-03"))
-    assert GoogleCalendar::Event.normalize(all_day)["all_day"]
-  end
-
-  test "an invitation becomes a decision card with its clashes" do
-    clash = calendar_event(event_id: "other", series_id: "other", summary: "1:1 with Grace", self_response: "accepted",
-                           start: Time.zone.local(2026, 10, 1, 15, 30).iso8601, end: Time.zone.local(2026, 10, 1, 16, 30).iso8601)
-    card = sync(changed: [ calendar_event ], agenda: [ clash ]).sole
+  test "an unanswered invitation becomes a decision card with its clashes" do
+    clash = going(event_id: "other", series_id: "other", summary: "1:1 with Grace",
+                  start: Time.zone.local(2026, 10, 1, 15, 30).iso8601, end: Time.zone.local(2026, 10, 1, 16, 30).iso8601)
+    card = sync([ calendar_event, clash ]).sole
 
     assert_equal [ "calendar", "decision", "Design review", "Ada Lovelace", "calendar:series:ev1" ],
                  card.values_at(:card_type, :ask, :summary, :project, :key)
     assert_equal [ "1:1 with Grace (15:30–16:30)" ], card.payload["conflicts"]
-    assert_match "Thu 1 Oct, 15:00–16:00", card.payload["body"]
   end
 
-  test "a recurring invitation is one card for the series; answered, own and past events stay out" do
+  test "a recurring invitation is one card; answered, own and past events stay out" do
     instances = (0..3).map { |i| calendar_event(event_id: "wk_#{i}", series_id: "wk", recurring: true, start: (NOW + (i + 1).weeks).iso8601, end: (NOW + (i + 1).weeks + 1.hour).iso8601) }
     others = [
-      calendar_event(event_id: "yes", series_id: "yes", self_response: "accepted"),
+      going(event_id: "yes", series_id: "yes"),
       calendar_event(event_id: "mine", series_id: "mine", organizer_self: true),
       calendar_event(event_id: "old", series_id: "old", start: (NOW - 2.hours).iso8601, end: (NOW - 1.hour).iso8601)
     ]
-    cards = sync(changed: instances.reverse + others)
+    cards = sync(instances.reverse + others)
     assert_equal [ "calendar:series:wk" ], cards.map(&:key)
-    assert_equal "wk_0", cards.sole.payload["event_id"], "the next occurrence represents the series"
+    assert_equal "wk_0", cards.sole.payload["event_id"]
   end
 
-  test "the same change isn't carded twice" do
-    sync(changed: [ calendar_event ])
-    Card.last.handle!(with: "done")
-    assert_empty sync(changed: [ calendar_event ], now: NOW + 5.minutes)
+  test "polling again doesn't re-card or re-top an invitation" do
+    card = sync([ calendar_event ]).sole
+    later = Card.create!(summary: "newer")
+    assert_empty sync([ calendar_event ], now: NOW + 2.minutes)
+    assert_operator card.reload.position, :<, later.position
   end
 
-  test "meetings Bobby is going to that move or get cancelled become heads-ups" do
-    going = [ calendar_event(self_response: "accepted"), calendar_event(event_id: "ev2", series_id: "ev2", summary: "Lunch", self_response: "accepted") ]
-    sync(agenda: going) # learns what he's going to
-    assert_equal %w[ev1 ev2], sources(:calendar).reload.settings["known_events"].keys
+  test "the card clears itself once Bobby answers in Calendar" do
+    card = sync([ calendar_event ]).sole
+    sync([ going ], now: NOW + 2.minutes)
+    assert card.reload.handled?
+    assert_equal "answered in Calendar", card.handled_with
+  end
 
-    moved = calendar_event(self_response: "accepted", updated: "2026-09-29T11:00:00Z",
-                           start: Time.zone.local(2026, 10, 2, 11).iso8601, end: Time.zone.local(2026, 10, 2, 12).iso8601)
-    cancelled = { "event_id" => "ev2", "series_id" => "ev2", "status" => "cancelled", "updated" => "2026-09-29T11:00:00Z" }
-    cards = sync(changed: [ moved, cancelled ], now: NOW + 1.hour)
+  test "meetings Bobby is going to that move, get cancelled or disappear become heads-ups" do
+    lunch = going(event_id: "ev2", series_id: "ev2", summary: "Lunch")
+    gym = going(event_id: "ev3", series_id: "ev3", summary: "Gym")
+    sync([ going, lunch, gym ])
 
-    assert_equal [ "Cancelled: Lunch", "Moved: Design review" ].sort, cards.map(&:summary).sort
-    cards = cards.sort_by(&:summary).reverse
+    moved = going(start: Time.zone.local(2026, 10, 2, 11).iso8601, end: Time.zone.local(2026, 10, 2, 12).iso8601)
+    cards = sync([ moved, lunch.merge("status" => "cancelled") ], now: NOW + 1.hour)
+
+    assert_equal [ "Cancelled: Gym", "Cancelled: Lunch", "Moved: Design review" ], cards.map(&:summary).sort
     assert cards.all? { |c| c.ask == "acknowledge" }
-    assert_match "Fri 2 Oct, 11:00–12:00 (was Thu 1 Oct, 15:00)", cards.first.payload["body"]
+    assert_match "Fri 2 Oct, 11:00–12:00 (was Thu 1 Oct, 15:00)", cards.find { |c| c.summary.start_with?("Moved") }.payload["body"]
   end
 
-  test "RSVP stamps answer with Bobby's note, never the secretary's advice" do
-    card = sync(changed: [ calendar_event ]).sole
-    card.update!(proposed_action: "Accept: no clashes.")
-
-    assert_enqueued_with job: CalendarActionJob, args: [ card, "accept", nil ] do
-      Gestures.stamp(card, stamps(:accept))
-    end
-
-    other = sync(changed: [ calendar_event(event_id: "ev9", series_id: "ev9") ]).sole
-    assert_enqueued_with job: CalendarActionJob, args: [ other, "decline", "Traveling that week" ] do
-      Gestures.stamp(other, stamps(:decline), text: "Traveling that week")
+  test "Later reads the calendar so the secretary can resolve 'after my 3pm'" do
+    with_stub(MacEventKit, :available?, true) do
+      with_stub(MacEventKit, :events, [ going(summary: "Design review") ]) do
+        assert_equal "- Thu 1 Oct, 15:00–16:00: Design review", Secretary.new.send(:agenda_text, NOW)
+      end
     end
   end
 
-  test "RSVP stamps live in the card's tool, not the tray; heads-ups can't be answered" do
-    card = sync(changed: [ calendar_event ]).sole
-    assert_empty StampTray.for(card).shown, "Accept/Maybe/Decline are in the tool; Done is \"Handled without answering\""
+  test "a calendar card points to Calendar for the answer" do
+    card = sync([ calendar_event ]).sole
+    assert_empty StampTray.for(card).shown.map(&:label) & %w[Accept Decline]
+    assert_not card.type.decomposable?
+  end
+end
 
-    heads_up = Card.create!(card_type: "calendar", summary: "Cancelled: Lunch", payload: { "change" => "cancelled" })
-    assert_no_enqueued_jobs(only: CalendarActionJob) { Gestures.stamp(heads_up, stamps(:accept)) }
+class RemindersTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
+  NOW = CalendarTest::NOW
+
+  def sync(reminders, now: NOW)
+    travel_to(now) { MacReminders::Sync.call(sources(:reminders), kit: FakeKit.new(reminders: reminders), now: now) }
   end
 
-  test "the action job answers in Google Calendar, or reports why it couldn't" do
-    card = sync(changed: [ calendar_event ]).sole
-    calendar = FakeCalendar.new
-    with_stub(GoogleCalendar::Calendar, :new, calendar) { CalendarActionJob.perform_now(card, "tentative", "Might be late") }
-    assert_equal [ [ "ev1", "tentative", "Might be late" ] ], calendar.responses
-
-    sources(:calendar).update!(secret: nil)
-    CalendarActionJob.perform_now(card.reload, "accept")
-    assert_match "no connected calendar", card.children.sole.summary
+  test "due reminders from any list, and everything in the Stack list, become cards" do
+    cards = sync([
+      reminder(reminder_id: "due", title: "Pay rent", due: (NOW - 1.hour).iso8601),
+      reminder(reminder_id: "later", title: "Call mom", due: (NOW + 1.day).iso8601),
+      reminder(reminder_id: "someday", title: "Learn piano"),
+      reminder(reminder_id: "stack", title: "Order filament", list: "Stack")
+    ])
+    assert_equal [ "Pay rent", "Order filament" ], cards.map(&:summary)
+    assert_equal [ "reminder", "Personal", "review" ], cards.first.values_at(:card_type, :project, :ask)
   end
 
-  test "respond patches Bobby's own RSVP on the whole series and notifies everyone" do
-    me = G::EventAttendee.new(email: "bobby@x.com", self: true, response_status: "needsAction")
-    ada = G::EventAttendee.new(email: "ada@x.com", response_status: "accepted")
-    patched = []
-    service = Object.new
-    service.define_singleton_method(:get_event) { |_cal, _id| G::Event.new(summary: "Standup", attendees: [ me, ada ]) }
-    service.define_singleton_method(:patch_event) { |cal, id, event, send_updates:| patched << [ cal, id, event, send_updates ] }
-
-    calendar = GoogleCalendar::Calendar.new(sources(:calendar))
-    calendar.instance_variable_set(:@service, service)
-    calendar.respond({ "event_id" => "wk_0", "series_id" => "wk" }, "decline", "Out that week")
-
-    cal, id, event, send_updates = patched.sole
-    assert_equal [ "primary", "wk", "all" ], [ cal, id, send_updates ]
-    assert_equal [ [ "declined", "Out that week" ], [ "accepted", nil ] ], event.attendees.map { |a| [ a.response_status, a.comment ] }
+  test "the Stack list name is configurable" do
+    sources(:reminders).update!(settings: { "list" => "Inbox" })
+    assert_equal [ "Sort mail" ], sync([ reminder(title: "Sort mail", list: "Inbox") ]).map(&:summary)
   end
 
-  test "Google sign-in reads the pasted address and checks it belongs to this sign-in" do
-    GoogleOauth.configure!("client-id.apps.googleusercontent.com", "shh")
-    assert_equal "client-id.apps.googleusercontent.com", GoogleOauth.client_id
-    assert_match "scope=https://www.googleapis.com/auth/calendar.events", CGI.unescape(GoogleOauth.url("calendar", state: "abc"))
-    assert_not_includes Credential.connection.select_values("SELECT secret FROM credentials").join, "shh"
+  test "polling again doesn't duplicate a reminder already in the stack" do
+    due = reminder(due: (NOW - 1.hour).iso8601)
+    sync([ due ])
+    assert_empty sync([ due ], now: NOW + 2.minutes)
+  end
 
-    assert_raises(ArgumentError, match: /different sign-in/) { GoogleOauth.exchange("calendar", "http://localhost:8765/?state=zzz&code=1", state: "abc") }
-    assert_raises(ArgumentError, match: /no code/) { GoogleOauth.exchange("calendar", "http://localhost:8765/?state=abc", state: "abc") }
+  test "Done completes the reminder; Later moves its due time" do
+    card = sync([ reminder(list: "Stack") ]).sole
+    assert_enqueued_with(job: ReminderActionJob, args: [ card, "complete" ]) { Gestures.reply(card, "") }
+
+    other = sync([ reminder(reminder_id: "r2", list: "Stack") ]).sole
+    travel_to(NOW) do
+      assert_enqueued_with(job: ReminderActionJob, args: [ other, "reschedule", (NOW + 2.hours).iso8601 ]) { Gestures.later(other, "2h") }
+    end
+  end
+
+  test "the action job talks to Reminders, or reports why it couldn't" do
+    card = sync([ reminder(list: "Stack") ]).sole
+    completed = []
+    original = MacEventKit.method(:complete)
+    MacEventKit.define_singleton_method(:complete) { |id| completed << id }
+    ReminderActionJob.perform_now(card, "complete")
+    assert_equal [ "r1" ], completed
+
+    MacEventKit.define_singleton_method(:complete) { |_id| raise MacEventKit::Error, "no reminder r1" }
+    ReminderActionJob.perform_now(card, "complete")
+    assert_match "Couldn't complete", card.children.sole.summary
+  ensure
+    MacEventKit.define_singleton_method(:complete, original)
+  end
+
+  test "a reminder completed elsewhere clears its card" do
+    card = sync([ reminder(list: "Stack") ]).sole
+    sync([], now: NOW + 2.minutes)
+    assert_equal "completed in Reminders", card.reload.handled_with
+  end
+
+  test "decomposing a reminder makes plain cards, so a step doesn't complete it" do
+    card = sync([ reminder(list: "Stack", title: "Plan trip") ]).sole
+    step = Gestures.decompose(card, [ { "summary" => "Book flights" } ]).sole
+    assert_equal "generic", step.card_type
+    assert_nil step.payload["reminder_id"]
+    assert_no_enqueued_jobs(only: ReminderActionJob) { Gestures.reply(step, "") }
+  end
+end
+
+class MacEventKitTest < ActiveSupport::TestCase
+  test "talks JSON to the helper and reports its errors" do
+    helper = Rails.root.join("tmp/fake_eventkit_#{SecureRandom.hex(3)}").to_s
+    File.write(helper, <<~SH)
+      #!/bin/sh
+      case "$1" in
+        access) echo '{"calendar":"granted","reminders":"denied"}' ;;
+        events) echo "[{\\"event_id\\":\\"e1\\",\\"from\\":\\"$2\\"}]" ;;
+        *) echo "no reminder $2" >&2; exit 1 ;;
+      esac
+    SH
+    File.chmod(0o755, helper)
+
+    with_env("STACK_EVENTKIT_BIN" => helper) do
+      assert MacEventKit.granted?("calendar")
+      assert_not MacEventKit.granted?("reminders")
+      assert_equal "2026-09-29T10:00:00Z", MacEventKit.events(from: Time.utc(2026, 9, 29, 10), to: Time.utc(2026, 9, 30)).sole["from"]
+      assert_raises(MacEventKit::Error, match: /no reminder x/) { MacEventKit.complete("x") }
+    end
+  ensure
+    FileUtils.rm_f(helper)
+  end
+
+  test "off the Mac, it says so" do
+    skip "running on a Mac" if RUBY_PLATFORM.include?("darwin")
+    with_env("STACK_EVENTKIT_BIN" => nil) do
+      assert_not MacEventKit.available?
+      assert_raises(MacEventKit::Error, match: /on the Mac/) { MacEventKit.access }
+    end
   end
 end

@@ -172,30 +172,47 @@ class ClaudeLoginFlowTest < ActionDispatch::IntegrationTest
 end
 
 class CalendarFlowTest < ActionDispatch::IntegrationTest
-  test "an invitation card shows when, clashes and the RSVP buttons, with the secretary's pick marked" do
-    card = Intake.receive(sources(:calendar), calendar_event("change" => "invitation", "conflicts" => [ "1:1 with Grace (15:30–16:30)" ]))
-    card.update!(payload: card.payload.merge("likely_stamps" => [ "Decline" ]))
+  test "an invitation card shows when and clashes, and points to Calendar" do
+    Intake.receive(sources(:calendar), calendar_event("change" => "invitation", "conflicts" => [ "1:1 with Grace (15:30–16:30)" ]))
     get root_url
     assert_select ".calendar-when", "Thu 1 Oct, 15:00–16:00"
     assert_select ".calendar-conflicts", /1:1 with Grace/
-    assert_select ".tool-calendar button.stamp", 3
-    assert_select ".tool-calendar button.recommended[formaction=?]", stamp_card_path(card, stamp_id: stamps(:decline).id)
+    assert_match "Answer it in Calendar", response.body
+    assert_select "button.stamp", false
   end
 
-  test "connecting a Google source from the web" do
-    get connect_source_url(sources(:calendar))
-    assert_select "input[name=client_id]"
+  test "a reminder card shows when it was due" do
+    Intake.receive(sources(:reminders), reminder("due" => Time.zone.local(2026, 9, 29, 9).iso8601))
+    get root_url
+    assert_select ".calendar-when", "Due Tue 29 Sep, 09:00"
+    assert_select "input[type=submit][value=Done]"
+  end
+
+  test "allowing Calendar access from the web" do
+    with_stub(MacEventKit, :request_access, { "calendar" => "granted", "reminders" => "not_determined" }) do
+      with_stub(MacCalendar::Sync, :call, []) do
+        post allow_source_url(sources(:calendar))
+      end
+      assert_redirected_to sources_url
+      assert_equal "calendar connected: 0 new cards", flash[:notice]
+
+      post allow_source_url(sources(:reminders))
+      assert_match "Privacy & Security → Reminders", flash[:alert]
+    end
+  end
+
+  test "choosing the Reminders list and connecting Gmail from the web" do
+    patch source_url(sources(:reminders)), params: { source: { reminders_list: "Inbox" } }
+    assert_equal "Inbox", MacReminders::Sync.list_name(sources(:reminders).reload)
 
     post google_client_sources_url, params: { client_id: "cid", client_secret: "secret" }
-    get connect_source_url(sources(:calendar))
+    get connect_source_url(sources(:gmail))
     assert_select "a.login-link[href*=?]", "accounts.google.com"
-
     with_stub(GoogleOauth, :exchange, "refresh-token") do
-      with_stub(GoogleCalendar::Sync, :call, []) do
-        post authorize_source_url(sources(:calendar)), params: { pasted: "http://localhost:8765/?code=x" }
+      with_stub(Gmail::Sync, :call, []) do
+        post authorize_source_url(sources(:gmail)), params: { pasted: "http://localhost:8765/?code=x" }
       end
     end
-    assert_redirected_to sources_url
-    assert_equal "refresh-token", sources(:calendar).reload.secret
+    assert_equal "refresh-token", sources(:gmail).reload.secret
   end
 end

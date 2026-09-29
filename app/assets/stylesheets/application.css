@@ -390,3 +390,4 @@ body.dispenser {
 .calendar-when { font-weight: 600; font-size: 1.05rem; }
 .calendar-conflicts { color: var(--stale); font-weight: 600; font-size: 0.9rem; }
 .stamp.recommended { background: color-mix(in srgb, var(--stamp) 14%, transparent); border-width: 3px; }
+.inline-button { display: inline; margin: 0 0.25rem; }

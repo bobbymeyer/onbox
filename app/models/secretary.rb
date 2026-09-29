@@ -36,8 +36,9 @@ class Secretary
       subject, no signature, a greeting only if Bobby would plainly use one.
       Newsletters, receipts and automated mail are "acknowledge".
       For a calendar invitation it is one line of advice to Bobby (accept,
-      maybe or decline, and why: clashes, who's asking, how much time), and
-      likely_stamps orders Accept / Maybe / Decline by your advice.
+      maybe or decline, and why: clashes, who's asking, how much time); he
+      answers it in Calendar. For a reminder it is the first concrete step,
+      or "" when the reminder says it all.
     - likely_stamps: up to three labels from the available stamps that best fit
       this card, most likely first. Only use labels from the list given.
 
@@ -170,10 +171,11 @@ class Secretary
   private
     # Today and tomorrow on Bobby's calendar, for resolving "after my 3pm".
     def agenda_text(now)
-      source = Source.calendar.find(&:connected?) or return
-      GoogleCalendar::Calendar.new(source).agenda(from: now.beginning_of_day, to: now.end_of_day + 1.day)
+      return unless Source.calendar.exists? && MacEventKit.available?
+      MacEventKit.events(from: now.beginning_of_day, to: now.end_of_day + 1.day)
+        .select { |event| MacCalendar::Sync.going?(event) }
         .map { |event| "- #{Intake::When.describe(event)}: #{event["summary"]}" }.join("\n").presence || "nothing scheduled"
-    rescue Google::Apis::Error, Signet::AuthorizationError => e
+    rescue MacEventKit::Error => e
       Rails.logger.warn("[secretary] calendar: #{e.message}")
       nil
     end

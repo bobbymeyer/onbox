@@ -28,10 +28,7 @@ Stamp.find_or_create_by!(label: "Archive", card_type: "email") do |s|
 end
 
 Source.find_or_create_by!(name: "calendar") { |s| s.kind = "calendar" }
-
-{ "Accept" => "accept", "Maybe" => "tentative", "Decline" => "decline" }.each do |label, kind|
-  Stamp.find_or_create_by!(label: label, card_type: "calendar") { |s| s.action = { "kind" => kind } }
-end
+Source.find_or_create_by!(name: "reminders") { |s| s.kind = "reminders" }
 
 Stamp.find_or_create_by!(label: "Done", card_type: "any") do |s|
   s.action = { "kind" => "handle" }

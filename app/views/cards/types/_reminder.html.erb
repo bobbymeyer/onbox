@@ -1,0 +1,8 @@
+<% due = Time.zone.parse(card.payload["due"].to_s) %>
+<% if due %>
+  <p class="calendar-when <%= "calendar-conflicts" if due < 1.day.ago %>">Due <%= card.payload["all_day_due"] ? due.strftime("%a %-d %b") : due.strftime("%a %-d %b, %H:%M") %></p>
+<% end %>
+<%= form_with url: reply_card_path(card), class: "tool" do |f| %>
+  <p class="hint">Done completes it in Reminders; Later moves its due time.</p>
+  <%= f.submit card.type.send_label, class: "tool-send" %>
+<% end %>

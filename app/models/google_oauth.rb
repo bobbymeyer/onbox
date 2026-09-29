@@ -1,15 +1,11 @@
 require "signet/oauth_2/client"
 
-# Sign-in to Google for the email and calendar sources, each with its own
-# scope and refresh token. Uses the loopback redirect of a Desktop OAuth
+# Sign-in to Google for the email source. Uses the loopback redirect of a Desktop OAuth
 # client, so it needs no public URL: after approving, the browser lands on a
 # localhost address that fails to load, and Bobby pastes that address (or
 # just its code) back into onbox.
 module GoogleOauth
-  SCOPES = {
-    "email" => "https://www.googleapis.com/auth/gmail.modify",
-    "calendar" => "https://www.googleapis.com/auth/calendar.events"
-  }.freeze
+  SCOPES = { "email" => "https://www.googleapis.com/auth/gmail.modify" }.freeze
   REDIRECT_URI = "http://localhost:8765".freeze
 
   module_function

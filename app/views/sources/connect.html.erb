@@ -4,7 +4,7 @@
   <h1>Connect <%= @source.name %></h1>
 
   <% if @url %>
-    <p class="hint">Signs <%= @source.name %> in to your Google <%= @source.calendar? ? "Calendar (to read events and answer invitations)" : "mail (to read, reply and archive)" %>.</p>
+    <p class="hint">Signs <%= @source.name %> in to your Gmail (to read, reply and archive).</p>
     <ol class="login-steps">
       <li>
         <%= link_to "Sign in with Google", @url, target: "_blank", rel: "noopener", class: "tool-send login-link" %>

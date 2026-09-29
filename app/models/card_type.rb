@@ -17,6 +17,12 @@ class CardType
     # Actions the type's own tool offers, so the stamp tray leaves them out.
     def tool_actions = []
 
+    # Called when the card is held until a time.
+    def deferred(card, until_time) = nil
+
+    # The type of the cards a decomposition makes.
+    def decomposed_type = name
+
     # Action kinds this type can carry out besides "handle".
     def actions = []
 
@@ -60,25 +66,34 @@ class CardType
     end
   end
 
-  # An invitation to answer, or a heads-up that a meeting moved or was
-  # cancelled. The tool's Accept / Maybe / Decline buttons are stamps (with an
-  # optional note to the organizer); the tray leaves them to the tool.
+  # An invitation, or a heads-up that a meeting moved or was cancelled, from
+  # the Mac's Calendar. Apple offers no way to answer invitations, so Bobby
+  # answers in Calendar and the card clears itself when that syncs back.
   class Calendar < Generic
     def name = "calendar"
     def send_label = "Got it"
-    def actions = %w[accept tentative decline]
-    def tool_actions = [ *actions, "handle" ] # "Handled without answering" covers Done
-    def primary_action = "accept"
     def decomposable? = false
+    def tool_actions = [ "handle" ] # the card's own button is Done
+  end
 
-    # A stamp with no typed note falls back to the card's proposed action,
-    # which here is the secretary's advice to Bobby, not a note for the
-    # organizer; only a note he wrote is sent.
+  # A reminder from the Mac's Reminders. Handling the card in any way
+  # completes the reminder; Later moves its due time.
+  class Reminder < Generic
+    def name = "reminder"
+    def send_label = "Done"
+    def tool_actions = [ "handle" ] # the card's own button is Done
+
     def perform(kind, card, text)
-      return unless actions.include?(kind) && card.payload["change"] == "invitation"
-      note = text unless text.blank? || text == card.proposed_action.to_s
-      CalendarActionJob.perform_later(card, kind, note)
+      ReminderActionJob.perform_later(card, "complete") if %w[handle reply].include?(kind)
     end
+
+    def deferred(card, until_time)
+      ReminderActionJob.perform_later(card, "reschedule", until_time.iso8601)
+    end
+
+    # Steps of a decomposed reminder are plain cards, so finishing one
+    # doesn't complete the whole reminder.
+    def decomposed_type = "generic"
   end
 
   # The noticer's offer to turn a repeated reply into a stamp. Its tool casts
@@ -98,12 +113,12 @@ class CardType
     def supports?(_kind) = false
   end
 
-  REGISTRY = [ Agent.new, Email.new, Calendar.new, Generic.new, StampOffer.new, Digest.new ].index_by(&:name).freeze
+  REGISTRY = [ Agent.new, Email.new, Calendar.new, Reminder.new, Generic.new, StampOffer.new, Digest.new ].index_by(&:name).freeze
   NAMES = REGISTRY.keys.freeze
   # Types a source or stamp can be for; offers and digests are the stack's own.
   SOURCE_NAMES = (NAMES - %w[stamp_offer digest]).freeze
 
-  SOURCE_KIND_DEFAULTS = { "claude_code" => "agent", "email" => "email", "calendar" => "calendar" }.freeze
+  SOURCE_KIND_DEFAULTS = { "claude_code" => "agent", "email" => "email", "calendar" => "calendar", "reminders" => "reminder" }.freeze
 
   def self.for(name)
     REGISTRY.fetch(name.to_s, REGISTRY["generic"])

@@ -71,12 +71,12 @@ module Gestures
           parent_card: card,
           blocked_by: previous,
           position: i.zero? ? front : nil,
-          card_type: card.card_type,
+          card_type: card.type.decomposed_type,
           project: card.project,
           summary: step["summary"].to_s.strip.truncate(200),
           ask: Card::ASKS.include?(step["ask"]) ? step["ask"] : "acknowledge",
           proposed_action: step["proposed_action"].to_s.strip.presence,
-          payload: card.payload.except("likely_stamps").merge("decomposed_from" => card.id),
+          payload: card.payload.except("likely_stamps", "reminder_id").merge("decomposed_from" => card.id),
           digested_at: Time.current
         )
       end

@@ -1,27 +1,17 @@
 <% event = card.payload %>
-<% invitation = event["change"] == "invitation" %>
 <div class="calendar-details">
   <p class="calendar-when"><%= Intake::When.describe(event) %></p>
   <% if event["location"].present? %><p class="hint"><%= event["location"] %></p><% end %>
   <% if event["conflicts"].present? %>
     <p class="calendar-conflicts">Clashes with <%= event["conflicts"].to_sentence %></p>
   <% end %>
-  <% if invitation && event["recurring"] %><p class="hint">Recurring: your answer covers the whole series.</p><% end %>
-  <% links = { "Open in Calendar" => event["html_link"], "Meet link" => event["meet_link"] }.compact_blank %>
-  <% if links.any? %>
-    <p class="hint"><%= safe_join(links.map { |label, url| link_to(label, url, target: "_blank", rel: "noopener") }, " · ") %></p>
+  <% if event["html_link"].present? %>
+    <p class="hint"><%= link_to "Meeting link", event["html_link"], target: "_blank", rel: "noopener" %></p>
+  <% end %>
+  <% if event["change"] == "invitation" %>
+    <p class="hint">Answer it in Calendar<%= " (it covers the whole series)" if event["recurring"] %>. This card clears itself once your answer syncs.</p>
   <% end %>
 </div>
-
-<% if invitation && (rsvp = calendar_stamps).any? %>
-  <%= form_with url: reply_card_path(card), class: "tool tool-calendar" do |f| %>
-    <%= f.text_area :text, rows: 2, placeholder: "Note to #{event["organizer"].presence || "the organizer"} (optional)", aria: { label: "Note to the organizer" } %>
-    <div class="stamp-tray">
-      <% likely = Array(event["likely_stamps"]).first %>
-      <% rsvp.each do |stamp| %>
-        <%= f.button stamp.label, type: "submit", formaction: stamp_card_path(card, stamp_id: stamp.id), class: [ "stamp", ("recommended" if stamp.label == likely) ] %>
-      <% end %>
-    </div>
-  <% end %>
+<%= form_with url: reply_card_path(card), class: "tool" do |f| %>
+  <%= f.submit event["change"] == "invitation" ? "Handled" : card.type.send_label, class: "tool-send" %>
 <% end %>
-<%= button_to invitation ? "Handled without answering" : card.type.send_label, reply_card_path(card), class: invitation ? "defer-button decline" : "tool-send" %>

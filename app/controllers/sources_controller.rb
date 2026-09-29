@@ -14,23 +14,44 @@ class SourcesController < ApplicationController
     end
   end
 
-  # Email sources: the Gmail search that decides which mail becomes cards.
-  def update
-    source = Source.find(params[:id])
-    query = params.expect(source: [ :email_query ])[:email_query].to_s.strip
-    source.update!(settings: source.settings.merge("query" => query.presence))
-    redirect_to sources_path, notice: "#{source.name} will use: #{source.email_query}"
-  end
-
   def poll
     source = Source.find(params[:id])
     cards = source.poll!
     redirect_to sources_path, notice: "#{source.name}: #{cards.size} new card(s)"
-  rescue ArgumentError, Google::Apis::Error, Signet::AuthorizationError => e
+  rescue ArgumentError, Google::Apis::Error, Signet::AuthorizationError, MacEventKit::Error => e
     redirect_to sources_path, alert: "#{source.name}: #{e.message}"
   end
 
-  # Google sign-in for email and calendar sources, from the web: a link to
+  # Calendar and Reminders: asks macOS for access (the prompt appears on the
+  # Mac's screen), then reads them once.
+  def allow
+    source = Source.find(params[:id])
+    access = MacEventKit.request_access[source.calendar? ? "calendar" : "reminders"]
+    if access == "granted"
+      cards = source.poll!
+      redirect_to sources_path, notice: "#{source.name} connected: #{helpers.pluralize(cards.size, "new card")}"
+    else
+      redirect_to sources_path, alert: "macOS says #{access.to_s.humanize(capitalize: false)} for #{source.name}. Allow it in System Settings → Privacy & Security → #{source.calendar? ? "Calendars" : "Reminders"}."
+    end
+  rescue MacEventKit::Error => e
+    redirect_to sources_path, alert: "#{source.name}: #{e.message}"
+  end
+
+  # Reminders: which list lands in the stack whole.
+  def update
+    source = Source.find(params[:id])
+    if source.email?
+      query = params.expect(source: [ :email_query ])[:email_query].to_s.strip
+      source.update!(settings: source.settings.merge("query" => query.presence))
+      redirect_to sources_path, notice: "#{source.name} will use: #{source.email_query}"
+    else
+      list = params.expect(source: [ :reminders_list ])[:reminders_list].to_s.strip
+      source.update!(settings: source.settings.merge("list" => list.presence))
+      redirect_to sources_path, notice: "Everything in \"#{MacReminders::Sync.list_name(source)}\" now lands in the stack"
+    end
+  end
+
+  # Google sign-in for the email source, from the web: a link to
   # approve, then paste back the address the browser landed on.
   def connect
     @source = Source.find(params[:id])

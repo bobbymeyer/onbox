@@ -84,6 +84,7 @@ class Card < ApplicationRecord
       triggers.create!(kind: :event, event_key: event_key) if event_key
       update!(state: :held, hold_until: until_time, hold_event: event_key)
     end
+    type.deferred(self, until_time) if until_time
   end
 
   def release!

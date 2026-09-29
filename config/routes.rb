@@ -41,6 +41,7 @@ Rails.application.routes.draw do
       post :poll
       get :connect
       post :authorize
+      post :allow
     end
     post :google_client, on: :collection
   end

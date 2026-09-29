@@ -1,8 +1,8 @@
 <div class="maint-card">
   <p class="maint-summary">Google client <%= GoogleOauth.configured? ? "saved" : "needed" %></p>
   <p class="hint">
-    Gmail and Calendar sign in through your own Google Cloud OAuth client. In Google Cloud Console: create a project,
-    enable the <b>Gmail API</b> and <b>Google Calendar API</b>, and create an OAuth client of type <b>Desktop app</b>.
+    Gmail signs in through your own Google Cloud OAuth client. In Google Cloud Console: create a project,
+    enable the <b>Gmail API</b>, and create an OAuth client of type <b>Desktop app</b>.
     If the consent screen is in testing mode, add yourself as a test user.
   </p>
   <%= form_with url: google_client_sources_path, class: "stack-form" do |f| %>
