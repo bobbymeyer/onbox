@@ -14,6 +14,9 @@ class CardType
     # What a stamp cast from Bobby's replies on this type does.
     def primary_action = "handle"
 
+    # Actions the type's own tool offers, so the stamp tray leaves them out.
+    def tool_actions = []
+
     # Action kinds this type can carry out besides "handle".
     def actions = []
 
@@ -57,6 +60,27 @@ class CardType
     end
   end
 
+  # An invitation to answer, or a heads-up that a meeting moved or was
+  # cancelled. The tool's Accept / Maybe / Decline buttons are stamps (with an
+  # optional note to the organizer); the tray leaves them to the tool.
+  class Calendar < Generic
+    def name = "calendar"
+    def send_label = "Got it"
+    def actions = %w[accept tentative decline]
+    def tool_actions = [ *actions, "handle" ] # "Handled without answering" covers Done
+    def primary_action = "accept"
+    def decomposable? = false
+
+    # A stamp with no typed note falls back to the card's proposed action,
+    # which here is the secretary's advice to Bobby, not a note for the
+    # organizer; only a note he wrote is sent.
+    def perform(kind, card, text)
+      return unless actions.include?(kind) && card.payload["change"] == "invitation"
+      note = text unless text.blank? || text == card.proposed_action.to_s
+      CalendarActionJob.perform_later(card, kind, note)
+    end
+  end
+
   # The noticer's offer to turn a repeated reply into a stamp. Its tool casts
   # the stamp (CardsController#cast); replying with nothing declines.
   class StampOffer < Generic
@@ -74,12 +98,12 @@ class CardType
     def supports?(_kind) = false
   end
 
-  REGISTRY = [ Agent.new, Email.new, Generic.new, StampOffer.new, Digest.new ].index_by(&:name).freeze
+  REGISTRY = [ Agent.new, Email.new, Calendar.new, Generic.new, StampOffer.new, Digest.new ].index_by(&:name).freeze
   NAMES = REGISTRY.keys.freeze
   # Types a source or stamp can be for; offers and digests are the stack's own.
   SOURCE_NAMES = (NAMES - %w[stamp_offer digest]).freeze
 
-  SOURCE_KIND_DEFAULTS = { "claude_code" => "agent", "email" => "email" }.freeze
+  SOURCE_KIND_DEFAULTS = { "claude_code" => "agent", "email" => "email", "calendar" => "calendar" }.freeze
 
   def self.for(name)
     REGISTRY.fetch(name.to_s, REGISTRY["generic"])

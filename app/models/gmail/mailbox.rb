@@ -46,7 +46,7 @@ module Gmail
     private
       def service
         @service ||= Google::Apis::GmailV1::GmailService.new.tap do |s|
-          s.authorization = Authorization.credentials(@source.secret)
+          s.authorization = GoogleOauth.credentials("email", @source.secret)
         end
       end
   end

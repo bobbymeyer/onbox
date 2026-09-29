@@ -1,0 +1,24 @@
+<% content_for :title, "Connect #{@source.name}" %>
+<main class="maintenance-view">
+  <nav class="maint-nav"><%= link_to "← Sources", sources_path %></nav>
+  <h1>Connect <%= @source.name %></h1>
+
+  <% if @url %>
+    <p class="hint">Signs <%= @source.name %> in to your Google <%= @source.calendar? ? "Calendar (to read events and answer invitations)" : "mail (to read, reply and archive)" %>.</p>
+    <ol class="login-steps">
+      <li>
+        <%= link_to "Sign in with Google", @url, target: "_blank", rel: "noopener", class: "tool-send login-link" %>
+        <span class="hint">and allow access. Google then sends the browser to a <code>localhost</code> page that won't load; that's expected.</span>
+      </li>
+      <li>
+        <%= form_with url: authorize_source_path(@source), class: "stack-form" do |f| %>
+          <%= f.label :pasted, "Copy that page's full address from the address bar and paste it here" %>
+          <%= f.text_field :pasted, placeholder: "http://localhost:8765/?state=…&code=…", autocomplete: "off", required: true %>
+          <%= f.submit "Connect" %>
+        <% end %>
+      </li>
+    </ol>
+  <% else %>
+    <%= render "sources/google_client" %>
+  <% end %>
+</main>

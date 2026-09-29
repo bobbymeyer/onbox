@@ -11,19 +11,21 @@
           <span><%= source.card_type %> cards</span>
         </div>
         <p class="maint-summary"><%= source.name %></p>
-        <% if source.email? %>
+        <% if source.google? %>
           <% if source.connected? %>
             <p class="hint">
               Connected. <%= source.last_polled_at ? "Last checked #{time_ago_in_words(source.last_polled_at)} ago." : "Not checked yet." %>
             </p>
             <% if source.last_error %><p class="hint flash-alert"><%= source.last_error %></p><% end %>
-            <%= form_with model: source, class: "stack-form inline-form" do |f| %>
-              <%= f.label :email_query, "Gmail search for new cards" %>
-              <%= f.text_field :email_query, value: source.email_query %>
-              <%= f.submit "Save search" %>
+            <% if source.email? %>
+              <%= form_with model: source, class: "stack-form inline-form" do |f| %>
+                <%= f.label :email_query, "Gmail search for new cards" %>
+                <%= f.text_field :email_query, value: source.email_query %>
+                <%= f.submit "Save search" %>
+              <% end %>
             <% end %>
           <% else %>
-            <p class="hint">Not connected. On the Mac, run <code>bin/rails gmail:connect[<%= source.name %>]</code>.</p>
+            <p class="hint">Not connected. <%= link_to "Connect #{source.name} to Google", connect_source_path(source) %></p>
           <% end %>
         <% end %>
         <details>
@@ -31,12 +33,20 @@
           <code class="token"><%= source.token %></code>
         </details>
         <div class="maint-actions">
-          <% if source.connected? %><%= button_to "Check now", poll_source_path(source) %><% end %>
+          <% if source.connected? %>
+            <%= button_to "Check now", poll_source_path(source) %>
+            <%= link_to "Reconnect", connect_source_path(source) %>
+          <% end %>
           <%= button_to "Delete", source_path(source), method: :delete, class: "danger", data: { turbo_confirm: "Delete #{source.name}? Its cards stay." } %>
         </div>
       </li>
     <% end %>
   </ul>
+
+  <% if Source.google.exists? %>
+    <h2>Google</h2>
+    <%= render "sources/google_client" %>
+  <% end %>
 
   <h2>New source</h2>
   <%= form_with model: @source, class: "stack-form" do |f| %>

@@ -10,7 +10,7 @@ class StampTray
   end
 
   def initialize(card)
-    stamps = Stamp.for_card(card).by_use.select { |stamp| stamp.applicable_to?(card) }
+    stamps = Stamp.for_card(card).by_use.select { |stamp| stamp.applicable_to?(card) && card.type.tool_actions.exclude?(stamp.action_kind) }
     likely = Array(card.payload["likely_stamps"]).filter_map { |label| stamps.find { |s| s.label == label } }.first(3)
     ordered = (likely + stamps).uniq
     @shown = ordered.first(SHOWN)

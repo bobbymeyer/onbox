@@ -170,3 +170,32 @@ class ClaudeLoginFlowTest < ActionDispatch::IntegrationTest
     assert_equal "sk-ant-oat01-existing", Credential.claude_token.secret
   end
 end
+
+class CalendarFlowTest < ActionDispatch::IntegrationTest
+  test "an invitation card shows when, clashes and the RSVP buttons, with the secretary's pick marked" do
+    card = Intake.receive(sources(:calendar), calendar_event("change" => "invitation", "conflicts" => [ "1:1 with Grace (15:30–16:30)" ]))
+    card.update!(payload: card.payload.merge("likely_stamps" => [ "Decline" ]))
+    get root_url
+    assert_select ".calendar-when", "Thu 1 Oct, 15:00–16:00"
+    assert_select ".calendar-conflicts", /1:1 with Grace/
+    assert_select ".tool-calendar button.stamp", 3
+    assert_select ".tool-calendar button.recommended[formaction=?]", stamp_card_path(card, stamp_id: stamps(:decline).id)
+  end
+
+  test "connecting a Google source from the web" do
+    get connect_source_url(sources(:calendar))
+    assert_select "input[name=client_id]"
+
+    post google_client_sources_url, params: { client_id: "cid", client_secret: "secret" }
+    get connect_source_url(sources(:calendar))
+    assert_select "a.login-link[href*=?]", "accounts.google.com"
+
+    with_stub(GoogleOauth, :exchange, "refresh-token") do
+      with_stub(GoogleCalendar::Sync, :call, []) do
+        post authorize_source_url(sources(:calendar)), params: { pasted: "http://localhost:8765/?code=x" }
+      end
+    end
+    assert_redirected_to sources_url
+    assert_equal "refresh-token", sources(:calendar).reload.secret
+  end
+end

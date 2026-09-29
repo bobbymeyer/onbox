@@ -64,7 +64,7 @@ class SourcesControllerTest < ActionDispatch::IntegrationTest
 
   test "shows connection state" do
     get sources_url
-    assert_match "gmail:connect[gmail]", response.body
+    assert_select "a[href=?]", connect_source_path(sources(:gmail)), "Connect gmail to Google"
   end
 
   test "email cards render a reply box addressed to the sender" do

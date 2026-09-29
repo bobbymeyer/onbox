@@ -84,3 +84,29 @@ class ActiveSupport::TestCase
     old.each { |k, v| ENV[k] = v }
   end
 end
+
+class ActiveSupport::TestCase
+  # A normalized calendar event, Thursday 1 Oct 2026 15:00–16:00 by default.
+  def calendar_event(**overrides)
+    {
+      "event_id" => "ev1", "series_id" => "ev1", "recurring" => false, "status" => "confirmed",
+      "updated" => "2026-09-29T10:00:00Z", "summary" => "Design review",
+      "start" => Time.zone.local(2026, 10, 1, 15).iso8601, "end" => Time.zone.local(2026, 10, 1, 16).iso8601,
+      "all_day" => false, "location" => "Room 4", "organizer" => "Ada Lovelace", "organizer_self" => false,
+      "attendees" => [], "self_response" => "needsAction", "html_link" => "https://calendar.google.com/event?eid=ev1"
+    }.merge(overrides.stringify_keys)
+  end
+
+  # Stands in for GoogleCalendar::Calendar.
+  class FakeCalendar
+    attr_reader :responses
+
+    def initialize(changed: [], agenda: [])
+      @changed, @agenda, @responses = changed, agenda, []
+    end
+
+    def changed(since:) = @changed
+    def agenda(from:, to:) = @agenda
+    def respond(payload, kind, note = nil) = @responses << [ payload["series_id"], kind, note ]
+  end
+end

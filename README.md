@@ -2,7 +2,7 @@
 
 The world is concurrent; Bobby's attention is single-threaded. The Stack is the
 serializer in between: everything pulling at him (Claude agents finishing, and
-email, and later calendar and a print completing) becomes one index card in front of him.
+email, calendar, and later a print completing) becomes one index card in front of him.
 
 Rails 8, omakase: SQLite, Solid Queue / Cache / Cable, Hotwire, importmap, Propshaft.
 
@@ -17,6 +17,7 @@ Rails 8, omakase: SQLite, Solid Queue / Cache / Cable, Hotwire, importmap, Props
 | 5. Stamps: table, tray, PR-and-merge first | Done, with successors and repeats |
 | 6. Top-of-stack and later, with time triggers | Done, plus event triggers |
 | 7. Email as the second source and card type | Done: Gmail API polling, reply in thread, archive |
+| Calendar (after v1) | Done: invitations with clashes and one-tap RSVP, moved/cancelled heads-ups, "after my 3pm" |
 | 8. Maintenance view, decompose, noticer | Done |
 
 ## The model
@@ -171,7 +172,7 @@ and the model are ready, the Claude connection, and a **Test** button per tier.
 | `STACK_TIME_ZONE` | `UTC` | Where "tonight" and "tomorrow" resolve. Set this, e.g. `Pacific Time (US & Canada)` |
 | `STACK_AGENT_COMMAND` | `{claude} --resume {session_id} -p {instruction}` | How an instruction reaches a session. `{claude}`, `{session_id}`, `{instruction}`, `{cwd}` are substituted per argument (no shell). Runs in the session's cwd, on your Claude login |
 | `STACK_PASSWORD` / `STACK_USER` | unset / `bobby` | Optional HTTP basic auth on the views. Tailscale is the main perimeter |
-| `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` | — | OAuth client for the email source (see below) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth client for Gmail and Calendar, if not entered on `/sources` (`GMAIL_CLIENT_*` still work) |
 
 With the `api` backend, the secretary enables server-side refusal fallbacks
 (`fallbacks: :default`), so a declined request is retried on another model.
@@ -209,16 +210,19 @@ open card: sender and subject on the front, the secretary's drafted reply as
 the proposed action, the full message on the back. **Send reply** (or the
 **Approve** stamp) replies in the thread; the **Archive** stamp archives it.
 
-One-time setup:
+One-time setup, all in the web interface (Gmail and Calendar share it):
 
-1. In Google Cloud Console, create a project, enable the **Gmail API**, and
-   create an OAuth client of type **Desktop app**. If the consent screen is in
-   testing mode, add your address as a test user. (Testing-mode refresh tokens
-   expire after 7 days; publish the app, still unverified, to keep them.)
-2. Export `GMAIL_CLIENT_ID` and `GMAIL_CLIENT_SECRET` for the Rails process.
-3. On the Mac: `bin/rails gmail:connect[gmail]`. Open the printed URL, approve,
-   and paste back the `localhost` URL the browser lands on (the page itself
-   won't load; the code is in the address).
+1. In Google Cloud Console, create a project, enable the **Gmail API** and the
+   **Google Calendar API**, and create an OAuth client of type **Desktop app**.
+   If the consent screen is in testing mode, add your address as a test user.
+   (Testing-mode refresh tokens expire after 7 days; publish the app, still
+   unverified, to keep them.)
+2. On `/sources`, paste the client ID and secret under **Google** (stored
+   encrypted; or set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`).
+3. On the source, **Connect** → **Sign in with Google** → allow. Google then
+   sends the browser to a `localhost` address that won't load; copy that
+   address from the address bar, paste it into onbox, **Connect**. Works from
+   the phone. (`bin/rails gmail:connect[gmail]` does the same from a terminal.)
 
 The scope is `gmail.modify` (read, send, label and archive; no permanent delete). The refresh token
 is stored encrypted in the `sources` table. Which mail becomes a card is a
@@ -233,6 +237,26 @@ resolved by the secretary to that event key.
 Other mail bridges can POST the same shape to `/intake` on an email source:
 `thread_id`, `message_id`, `from`, `reply_to`, `subject`, `body`,
 `rfc822_message_id`, `references`.
+
+### Wiring Google Calendar
+
+The `calendar` source (seeded) polls your primary calendar every five minutes.
+Connect it on `/sources` the same way as Gmail; its scope is `calendar.events`
+(read events, answer invitations). Three things become cards:
+
+- **Invitations you haven't answered** — a decision card per event (one per
+  series for recurring invites) with when, where, links, and any clash with a
+  meeting you're going to. The secretary recommends Accept, Maybe or Decline
+  (marked on the card) with a one-line reason. The buttons RSVP in Google
+  Calendar for the whole series and notify the organizer; type a note first to
+  send it along. The secretary's advice is never sent as the note.
+- **Moved** and **cancelled** meetings you were going to, as heads-ups to
+  acknowledge. (It remembers your upcoming meetings between polls to tell.)
+
+Your own events, invites you've already answered, and past events stay out.
+When you tap **Later** with something like "after my 3pm" or "after standup",
+the secretary reads today's and tomorrow's calendar and wakes the card when
+that meeting ends.
 
 ### Other sources
 
@@ -268,7 +292,9 @@ held on `<source>:<event>`). Senders that can't set headers can pass `?token=`.
   yet re-judge the whole order as things change.
 - The noticer matches phrases exactly after normalizing; it won't yet see
   that "PR and merge" and "open a PR then merge" are the same request.
-- Not built yet: noticing when grooming time outruns handling time, and calendar.
+- Calendar is polled, not pushed (push channels need a public HTTPS URL),
+  and only the primary calendar is read.
+- Not built yet: noticing when grooming time outruns handling time.
 
 ## Tests
 

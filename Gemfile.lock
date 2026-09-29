@@ -136,6 +136,8 @@ GEM
       raabro (~> 1.4)
     globalid (1.4.0)
       activesupport (>= 6.1)
+    google-apis-calendar_v3 (0.57.0)
+      google-apis-core (>= 0.15.0, < 2.a)
     google-apis-core (1.2.5)
       addressable (~> 2.9)
       faraday (~> 2.13)
@@ -424,6 +426,7 @@ DEPENDENCIES
   bundler-audit
   capybara
   debug
+  google-apis-calendar_v3 (~> 0.57.0)
   google-apis-gmail_v1 (~> 0.53.0)
   googleauth (~> 1.17)
   image_processing (~> 1.2)
@@ -490,6 +493,7 @@ CHECKSUMS
   ffi (1.17.4-x86_64-linux-musl) sha256=3fdf9888483de005f8ef8d1cf2d3b20d86626af206cbf780f6a6a12439a9c49e
   fugit (1.14.0) sha256=e311a9cc85a54bb67649df45060e721282a1e2c8ebad40e41874a3a7d576f37e
   globalid (1.4.0) sha256=037f12fbf1d9d7a014d501c2d5c77356fd4ddd96d7a7991d6700bba96706f427
+  google-apis-calendar_v3 (0.57.0) sha256=85a1836d1b5e3745720c28f219d8f599564b9cdd4a72f97b8a4e61ce67498cb7
   google-apis-core (1.2.5) sha256=e21562b5627a0fc6a0c3165e429c3afed0f6a628eaa514e83f7204dda1adff69
   google-apis-gmail_v1 (0.53.0) sha256=8ac02850e636de42bd6f54f20565eab4bf089f4334ae6ee76ad7c051e92cd5a4
   google-cloud-env (2.4.0) sha256=01cb35ecee5d1c4d1cd4deaed8bb5bddc838e296bcc2a35c5d1ddd07ce40d28d

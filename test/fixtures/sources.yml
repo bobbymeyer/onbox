@@ -16,3 +16,10 @@ gmail:
   card_type: email
   token: gmail-test-token
   settings: {}
+
+calendar:
+  name: calendar
+  kind: calendar
+  card_type: calendar
+  token: calendar-test-token
+  settings: {}

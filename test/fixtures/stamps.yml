@@ -38,3 +38,21 @@ archive:
   card_type: email
   action: { "kind": "archive" }
   successors: []
+
+accept:
+  label: Accept
+  card_type: calendar
+  action: { "kind": "accept" }
+  successors: []
+
+maybe:
+  label: Maybe
+  card_type: calendar
+  action: { "kind": "tentative" }
+  successors: []
+
+decline:
+  label: Decline
+  card_type: calendar
+  action: { "kind": "decline" }
+  successors: []

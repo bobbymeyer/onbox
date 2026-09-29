@@ -178,7 +178,7 @@ body.dispenser {
 
 .tool { display: flex; flex-direction: column; gap: 0.4rem; }
 .tool-label { font-size: 0.75rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.06em; }
-.tool textarea, .stack-form input[type=text], .stack-form textarea, .stack-form select, .defer-later input {
+.tool textarea, .stack-form input[type=text], .stack-form input[type=password], .stack-form textarea, .stack-form select, .defer-later input {
   width: 100%;
   padding: 0.6rem 0.7rem;
   border: 1px solid var(--line);
@@ -385,3 +385,8 @@ body.dispenser {
 
 .login-steps { padding-left: 1.2rem; margin: 0.5rem 0; display: flex; flex-direction: column; gap: 0.75rem; }
 .login-link { display: inline-block; text-decoration: none; margin-right: 0.4rem; }
+
+.calendar-details p { margin: 0 0 0.35rem; }
+.calendar-when { font-weight: 600; font-size: 1.05rem; }
+.calendar-conflicts { color: var(--stale); font-weight: 600; font-size: 0.9rem; }
+.stamp.recommended { background: color-mix(in srgb, var(--stamp) 14%, transparent); border-width: 3px; }

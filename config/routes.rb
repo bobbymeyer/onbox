@@ -37,7 +37,12 @@ Rails.application.routes.draw do
   end
   resources :stamps, except: :show
   resources :sources, only: [ :index, :create, :update, :destroy ] do
-    post :poll, on: :member
+    member do
+      post :poll
+      get :connect
+      post :authorize
+    end
+    post :google_client, on: :collection
   end
 
   get "up" => "rails/health#show", as: :rails_health_check

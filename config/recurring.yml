@@ -22,3 +22,6 @@ production:
   secretary_digests:
     class: AccountingJob
     schedule: every hour at minute 2
+  poll_calendar:
+    class: CalendarPollJob
+    schedule: every 5 minutes

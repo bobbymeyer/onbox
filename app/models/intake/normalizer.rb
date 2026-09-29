@@ -4,6 +4,7 @@ module Intake
       case source.kind
       when "claude_code" then ClaudeCode
       when "email" then Email
+      when "calendar" then Calendar
       else Generic
       end
     end

@@ -35,6 +35,9 @@ class Secretary
       the ask is "acknowledge". For an email card it is the reply body only: no
       subject, no signature, a greeting only if Bobby would plainly use one.
       Newsletters, receipts and automated mail are "acknowledge".
+      For a calendar invitation it is one line of advice to Bobby (accept,
+      maybe or decline, and why: clashes, who's asking, how much time), and
+      likely_stamps orders Accept / Maybe / Decline by your advice.
     - likely_stamps: up to three labels from the available stamps that best fit
       this card, most likely first. Only use labels from the list given.
 
@@ -138,8 +141,10 @@ class Secretary
     known = known_event_keys(card)
     answer = structured(
       system: "Resolve Bobby's deferral into a wake-up trigger. Now is #{now.iso8601} (#{Time.zone.name}). " \
-              "Prefer a time. Use an event_key only when the text names something that matches a known key.",
-      user: "Deferral: #{text}\nKnown event keys: #{known.join(", ").presence || "none"}",
+              "Prefer a time. When the deferral names a meeting on his calendar (\"after my 3pm\", \"after standup\"), " \
+              "use the end of that meeting. Use an event_key only when the text names something that matches a known key.",
+      user: "Deferral: #{text}\nKnown event keys: #{known.join(", ").presence || "none"}\n" \
+            "His calendar:\n#{agenda_text(now) || "not connected"}",
       schema: LATER_SCHEMA
     )
     return unless answer
@@ -163,6 +168,16 @@ class Secretary
   end
 
   private
+    # Today and tomorrow on Bobby's calendar, for resolving "after my 3pm".
+    def agenda_text(now)
+      source = Source.calendar.find(&:connected?) or return
+      GoogleCalendar::Calendar.new(source).agenda(from: now.beginning_of_day, to: now.end_of_day + 1.day)
+        .map { |event| "- #{Intake::When.describe(event)}: #{event["summary"]}" }.join("\n").presence || "nothing scheduled"
+    rescue Google::Apis::Error, Signet::AuthorizationError => e
+      Rails.logger.warn("[secretary] calendar: #{e.message}")
+      nil
+    end
+
     def ask_for_front(card)
       stamps = Stamp.for_card(card).by_use.pluck(:label)
       source = card.source
