@@ -7,6 +7,7 @@ module Intake
     TRANSCRIPT_TAIL_BYTES = 256.kilobytes
 
     def self.call(source, payload)
+      return post(payload) if payload["hook_event_name"] == "Post"
       session_id = payload["session_id"].to_s
       hook = payload["hook_event_name"].to_s
       project = payload["cwd"].present? ? File.basename(payload["cwd"]) : nil
@@ -26,6 +27,23 @@ module Intake
         body: [ payload["message"], last_message ].compact_blank.uniq.join("\n\n"),
         payload: payload.merge("last_assistant_message" => last_message),
         event_keys: [ "claude_code:#{hook.underscore}", project && "claude_code:#{hook.underscore}:#{project}", session_id.presence && "claude_code:#{session_id}" ].compact
+      )
+    end
+
+    # A card Claude chose to post (the stack MCP bridge's post_to_stack): its
+    # own card, so it isn't folded into the session's next Stop.
+    def self.post(payload)
+      project = payload["project"].presence || (payload["cwd"].present? ? File.basename(payload["cwd"]) : "chat")
+      body = payload["last_assistant_message"].to_s
+      Event.new(
+        key: nil,
+        project: project,
+        summary: (payload["summary"].presence || first_line(body) || "Claude posted to the stack").truncate(200),
+        ask: payload["ask"].presence_in(Card::ASKS) || "review",
+        proposed_action: payload["proposed_action"].presence,
+        body: body,
+        payload: payload,
+        event_keys: [ "claude_code:post", "claude_code:post:#{project}" ]
       )
     end
 

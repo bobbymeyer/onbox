@@ -4,6 +4,10 @@ Rails.application.routes.draw do
 
   # Every source enters here, authenticated by its token.
   post "intake" => "intake#create", as: :intake
+  # The stack MCP bridge: post a card, read Bobby's answer.
+  namespace :api do
+    resources :cards, only: [ :create, :show ]
+  end
 
   resources :cards, only: [ :edit, :update, :destroy ] do
     member do
@@ -26,6 +30,9 @@ Rails.application.routes.draw do
   post "stack/bulk" => "maintenance#bulk", as: :bulk_cards
   post "stack/secretary" => "maintenance#converse", as: :secretary_conversation
   resources :directives, only: [ :create, :destroy ]
+  get "claude" => "claude#show", as: :claude
+  post "claude" => "claude#create"
+  post "claude/runs/:id/stop" => "claude#stop", as: :stop_claude_run
   get "secretary" => "secretary#show", as: :secretary
   post "secretary/test" => "secretary#test", as: :test_secretary
   post "secretary/judge/test" => "secretary#test_judge", as: :test_judge

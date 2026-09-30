@@ -25,6 +25,17 @@ elsif ARGV.first == "auth"
 elsif ENV["FAKE_CLAUDE_FAIL"]
   warn "Not logged in"
   exit 1
+elsif ARGV.include?("--output-format") && ARGV.include?("json") && !ARGV.include?("--json-schema")
+  # A headless turn: the prompt on stdin, the reply as a JSON result.
+  File.write(ENV.fetch("FAKE_CLAUDE_LOG"), seen.merge("launched" => ENV["STACK_LAUNCHED"], "run_id" => ENV["STACK_RUN_ID"], "tool_timeout" => ENV["MCP_TOOL_TIMEOUT"]).to_json) if ENV["FAKE_CLAUDE_LOG"]
+  sleep Float(ENV["FAKE_CLAUDE_SLEEP"]) if ENV["FAKE_CLAUDE_SLEEP"]
+  resumed = ARGV[ARGV.index("--resume") + 1] if ARGV.include?("--resume")
+  if input.include?("fail")
+    puts({ "type" => "result", "is_error" => true, "result" => "Credit balance is too low", "session_id" => resumed || "sess-new" }.to_json)
+    exit 1
+  end
+  puts({ "type" => "result", "subtype" => "success", "is_error" => false, "result" => "Done: #{input.strip}\n\nAll tests pass.",
+         "session_id" => resumed || "sess-new", "total_cost_usd" => 0.12 }.to_json)
 elsif ARGV.include?("--json-schema")
   puts({ "type" => "result", "is_error" => false, "result" => "", "structured_output" => { "reply" => "hi", "seen" => seen } }.to_json)
 else

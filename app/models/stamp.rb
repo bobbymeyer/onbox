@@ -1,12 +1,12 @@
 # A saved action applied in one motion. It bundles a message (template), an
 # action, and the cards it seeds afterwards (successors).
 #
-# action:     { "kind" => "instruct" | "reply" | "archive" | "handle", "repeat" => "1 week" }
+# action:     { "kind" => "instruct" | "reply" | "archive" | "handle" | "allow", "repeat" => "1 week" }
 # successors: [{ "summary" => "Deploy {{project}}", "ask" => "acknowledge",
 #                "card_type" => "generic", "later" => "tomorrow morning",
 #                "parallel" => false }]
 class Stamp < ApplicationRecord
-  ACTION_KINDS = %w[instruct reply handle archive].freeze
+  ACTION_KINDS = %w[instruct reply handle archive allow].freeze
 
   has_many :handlings, dependent: :nullify
 

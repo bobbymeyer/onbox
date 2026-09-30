@@ -1,0 +1,146 @@
+#!/usr/bin/env ruby
+# The stack MCP bridge: a stdio MCP server that lets Claude put cards in front
+# of Bobby and read what he did with them (see app/models/stack_mcp.rb).
+# Standard library only, so the Claude desktop app and any Claude Code
+# session can run it.
+#
+#   STACK_URL    onbox, e.g. http://127.0.0.1:3005
+#   STACK_TOKEN  the claude-code source's token (see /sources)
+#   STACK_RUN_ID set by onbox for runs it starts; turns on the approve tool
+require "json"
+require "net/http"
+require "uri"
+
+$stdout.sync = true
+POLL_SECONDS = Float(ENV.fetch("STACK_POLL_SECONDS", "3"))
+
+TOOLS = [
+  {
+    name: "post_to_stack",
+    description: "Put a card in front of Bobby in The Stack, his one-card-at-a-time queue. Use it when you need " \
+                 "a decision, a reply or a review from him, or when you finish a long task he asked to hear about. " \
+                 "The summary is one line he can act on without reading more. Returns the card's id; call " \
+                 "check_stack with it later to read his answer.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        summary: { type: "string", description: "One line, at most 90 characters: what happened or what's needed." },
+        ask: { type: "string", enum: %w[decision reply review acknowledge], description: "What's needed from Bobby." },
+        body: { type: "string", description: "The detail, for the back of the card." },
+        proposed_action: { type: "string", description: "The answer you'd suggest, for one-tap approval." },
+        project: { type: "string", description: "The project or thread this belongs to." }
+      },
+      required: %w[summary ask]
+    }
+  },
+  {
+    name: "check_stack",
+    description: "Read what Bobby did with a card you posted: still waiting, held until later, or handled with his reply.",
+    inputSchema: {
+      type: "object",
+      properties: { card_id: { type: "integer" } },
+      required: %w[card_id]
+    }
+  }
+].freeze
+
+APPROVE = {
+  name: "approve",
+  description: "Permission prompt tool: asks Bobby on The Stack whether to allow a tool call, and waits for his answer.",
+  inputSchema: {
+    type: "object",
+    properties: { tool_name: { type: "string" }, input: { type: "object" }, tool_input: { type: "object" }, tool_use_id: { type: "string" } },
+    required: %w[tool_name]
+  }
+}.freeze
+
+class StackError < StandardError; end
+
+def api(verb, path, body = nil)
+  base = ENV["STACK_URL"].to_s
+  raise StackError, "STACK_URL and STACK_TOKEN aren't set" if base.empty? || ENV["STACK_TOKEN"].to_s.empty?
+  uri = URI.join(base.chomp("/") + "/", path)
+  req = verb == :post ? Net::HTTP::Post.new(uri, "Content-Type" => "application/json") : Net::HTTP::Get.new(uri)
+  req["Authorization"] = "Bearer #{ENV["STACK_TOKEN"]}"
+  req.body = body.to_json if body
+  res = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: 5, read_timeout: 30) { |http| http.request(req) }
+  raise StackError, "The Stack answered #{res.code}: #{res.body.to_s[0, 300]}" unless res.is_a?(Net::HTTPSuccess)
+  JSON.parse(res.body)
+rescue SystemCallError, SocketError, Net::OpenTimeout, Net::ReadTimeout, JSON::ParserError => e
+  raise StackError, "couldn't reach The Stack: #{e.message}"
+end
+
+# Posts the prompt as a card and waits for Bobby. Onbox being briefly away
+# (a restart) doesn't end the wait.
+def approve(args)
+  input = args["tool_input"] || args["input"] || {}
+  card = api(:post, "api/cards", kind: "permission", tool_name: args["tool_name"], tool_input: input,
+                                 tool_use_id: args["tool_use_id"], run_id: ENV["STACK_RUN_ID"])
+  status = card
+  while status["decision"] == "pending"
+    sleep POLL_SECONDS
+    begin
+      status = api(:get, "api/cards/#{card["card_id"]}")
+    rescue StackError
+      next
+    end
+  end
+  if status["decision"] == "allow"
+    { behavior: "allow", updatedInput: input }
+  else
+    { behavior: "deny", message: status["reply"].to_s.empty? ? "Bobby denied this (#{status["handled_with"]})." : "Bobby denied this: #{status["reply"]}" }
+  end
+rescue StackError => e
+  { behavior: "deny", message: "Couldn't ask Bobby: #{e.message}" }
+end
+
+def describe(status)
+  case status["state"]
+  when "handled"
+    "Bobby handled card #{status["card_id"]} with #{status["handled_with"]}" + (status["reply"].to_s.empty? ? "." : ": #{status["reply"]}")
+  when "held"
+    "Card #{status["card_id"]} is held#{" until #{status["hold_until"]}" if status["hold_until"]}; Bobby hasn't answered yet."
+  else
+    "Card #{status["card_id"]} is waiting in the stack; Bobby hasn't answered yet."
+  end
+end
+
+def call_tool(name, args)
+  case name
+  when "approve" then [ approve(args).to_json, false ]
+  when "post_to_stack"
+    status = api(:post, "api/cards", kind: "note", summary: args["summary"], ask: args["ask"], body: args["body"],
+                                     proposed_action: args["proposed_action"], project: args["project"],
+                                     cwd: Dir.pwd)
+    [ "Posted to Bobby's stack as card #{status["card_id"]}. Call check_stack with card_id #{status["card_id"]} to read his answer.", false ]
+  when "check_stack" then [ describe(api(:get, "api/cards/#{Integer(args["card_id"])}")), false ]
+  else [ "Unknown tool #{name}", true ]
+  end
+rescue StackError, ArgumentError, TypeError => e
+  [ e.message, true ]
+end
+
+def respond(id, result = nil, error: nil)
+  message = { jsonrpc: "2.0", id: id }
+  error ? message[:error] = error : message[:result] = result
+  puts message.to_json
+end
+
+$stdin.each_line do |line|
+  request = JSON.parse(line) rescue next
+  id, params = request["id"], request["params"] || {}
+  case request["method"]
+  when "initialize"
+    respond(id, { protocolVersion: params["protocolVersion"] || "2025-06-18",
+                  capabilities: { tools: {} }, serverInfo: { name: "stack", version: "1.0" } })
+  when "tools/list"
+    respond(id, { tools: ENV["STACK_RUN_ID"].to_s.empty? ? TOOLS : TOOLS + [ APPROVE ] })
+  when "tools/call"
+    text, error = call_tool(params["name"].to_s, params["arguments"] || {})
+    respond(id, { content: [ { type: "text", text: text } ], isError: error })
+  when "ping"
+    respond(id, {})
+  else
+    respond(id, error: { code: -32601, message: "Method not found: #{request["method"]}" }) if id
+  end
+end

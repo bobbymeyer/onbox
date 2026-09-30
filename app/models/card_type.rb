@@ -99,6 +99,21 @@ class CardType
     def decomposed_type = "generic"
   end
 
+  # A Claude Code run started from onbox asking to use a tool (run a
+  # command, edit a file). The run waits until Bobby answers: the Allow stamp
+  # lets it; anything else denies it, and a reply tells Claude why or what to
+  # do instead (see StackMcp).
+  class Permission < Generic
+    def name = "permission"
+    def tool_label = "Or tell Claude why not, or what to do instead"
+    def tool_placeholder = "Don't touch production; use the staging database."
+    def send_label = "Deny"
+    def decomposable? = false
+
+    # Only Allow; any other stamp here would quietly deny.
+    def supports?(kind) = kind == "allow"
+  end
+
   # The noticer's offer to turn a repeated reply into a stamp. Its tool casts
   # the stamp (CardsController#cast); replying with nothing declines.
   class StampOffer < Generic
@@ -116,7 +131,7 @@ class CardType
     def supports?(_kind) = false
   end
 
-  REGISTRY = [ Agent.new, Email.new, Calendar.new, Reminder.new, Generic.new, StampOffer.new, Digest.new ].index_by(&:name).freeze
+  REGISTRY = [ Agent.new, Email.new, Calendar.new, Reminder.new, Permission.new, Generic.new, StampOffer.new, Digest.new ].index_by(&:name).freeze
   NAMES = REGISTRY.keys.freeze
   # Types a source or stamp can be for; offers and digests are the stack's own.
   SOURCE_NAMES = (NAMES - %w[stamp_offer digest]).freeze

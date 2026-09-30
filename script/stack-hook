@@ -5,7 +5,9 @@
 #   STACK_URL    e.g. http://mac-studio.tailnet-name.ts.net:3000
 #   STACK_TOKEN  the claude-code source token (see /sources)
 # The secretary's own claude runs are marked internal; they are not agents.
+# Runs onbox started itself report their own reply.
 [ -n "$STACK_INTERNAL" ] && exit 0
+[ -n "$STACK_LAUNCHED" ] && exit 0
 [ -n "$STACK_URL" ] && [ -n "$STACK_TOKEN" ] || exit 0
 curl -sS --max-time 5 -o /dev/null \
   -H "Authorization: Bearer $STACK_TOKEN" \

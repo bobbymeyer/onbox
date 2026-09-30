@@ -39,3 +39,9 @@ archive:
   action: { "kind": "archive" }
   successors: []
 
+
+allow:
+  label: Allow
+  card_type: permission
+  action: { "kind": "allow" }
+  successors: []

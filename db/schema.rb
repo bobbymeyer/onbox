@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_30_150100) do
   create_table "accountings", force: :cascade do |t|
     t.string "period", null: false
     t.datetime "starts_at", null: false
@@ -50,6 +50,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
     t.index ["parent_card_id"], name: "index_cards_on_parent_card_id"
     t.index ["source_id"], name: "index_cards_on_source_id"
     t.index ["state", "position"], name: "index_cards_on_state_and_position"
+  end
+
+  create_table "claude_runs", force: :cascade do |t|
+    t.integer "card_id"
+    t.integer "result_card_id"
+    t.string "session_id"
+    t.string "cwd", null: false
+    t.text "prompt", null: false
+    t.integer "pid"
+    t.string "state", default: "running", null: false
+    t.integer "exit_status"
+    t.float "cost_usd"
+    t.text "error"
+    t.datetime "finished_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["card_id"], name: "index_claude_runs_on_card_id"
+    t.index ["result_card_id"], name: "index_claude_runs_on_result_card_id"
+    t.index ["state"], name: "index_claude_runs_on_state"
   end
 
   create_table "credentials", force: :cascade do |t|
@@ -142,6 +161,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
   add_foreign_key "cards", "cards", column: "blocked_by_id"
   add_foreign_key "cards", "cards", column: "parent_card_id"
   add_foreign_key "cards", "sources"
+  add_foreign_key "claude_runs", "cards", column: "result_card_id", on_delete: :nullify
+  add_foreign_key "claude_runs", "cards", on_delete: :nullify
   add_foreign_key "handlings", "cards"
   add_foreign_key "handlings", "stamps"
   add_foreign_key "noticings", "cards", on_delete: :nullify

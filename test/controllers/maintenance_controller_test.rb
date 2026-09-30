@@ -302,3 +302,35 @@ class CalendarFlowTest < ActionDispatch::IntegrationTest
     assert_match "macOS says denied for mail. Allow it in System Settings → Privacy & Security → Automation", flash[:alert]
   end
 end
+
+class ClaudeControllerTest < ActionDispatch::IntegrationTest
+  setup do
+    @root = Rails.root.join("tmp/projects-#{SecureRandom.hex(3)}")
+    FileUtils.mkdir_p(@root.join("onbox/.git"))
+    FileUtils.mkdir_p(@root.join("not-a-repo"))
+  end
+
+  teardown { FileUtils.rm_rf(@root) }
+
+  test "asks Claude in a chat or a project, and only in those" do
+    with_env("STACK_PROJECT_DIRS" => @root.to_s, "STACK_CLAUDE_BIN" => FAKE_CLAUDE) do
+      get claude_url
+      assert_equal [ "Chat", "onbox" ], css_select("select[name=place] option").map(&:text)
+
+      post claude_url, params: { place: @root.join("onbox").to_s, prompt: "Run the tests" }
+      assert_equal "Claude is on it in onbox. The reply will land in the stack.", flash[:notice]
+      run = ClaudeRun.last
+      assert_equal [ @root.join("onbox").to_s, "Run the tests" ], [ run.cwd, run.prompt ]
+      run.watcher&.join(15)
+
+      post claude_url, params: { place: @root.join("not-a-repo").to_s, prompt: "x" }
+      assert_equal "That isn't one of your projects.", flash[:alert]
+      post claude_url, params: { place: "/etc", prompt: "x" }
+      assert_equal "That isn't one of your projects.", flash[:alert]
+      assert_equal 1, ClaudeRun.count
+
+      get claude_url
+      assert_select ".claude-run", 1
+    end
+  end
+end

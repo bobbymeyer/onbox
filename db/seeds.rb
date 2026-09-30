@@ -30,6 +30,10 @@ end
 Source.find_or_create_by!(name: "calendar") { |s| s.kind = "calendar" }
 Source.find_or_create_by!(name: "reminders") { |s| s.kind = "reminders" }
 
+Stamp.find_or_create_by!(label: "Allow", card_type: "permission") do |s|
+  s.action = { "kind" => "allow" }
+end
+
 Stamp.find_or_create_by!(label: "Done", card_type: "any") do |s|
   s.action = { "kind" => "handle" }
 end

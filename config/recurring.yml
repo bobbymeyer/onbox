@@ -22,3 +22,6 @@ production:
   poll_mac:
     class: MacPollJob
     schedule: every 2 minutes
+  sweep_claude_runs:
+    class: ClaudeRunSweepJob
+    schedule: every minute

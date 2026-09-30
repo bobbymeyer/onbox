@@ -391,3 +391,11 @@ body.dispenser {
 .calendar-conflicts { color: var(--stale); font-weight: 600; font-size: 0.9rem; }
 .stamp.recommended { background: color-mix(in srgb, var(--stamp) 14%, transparent); border-width: 3px; }
 .inline-button { display: inline; margin: 0 0.25rem; }
+
+/* ---------- Claude ---------- */
+
+.tool-permission { display: grid; gap: 0.35rem; margin-bottom: 0.75rem; }
+.permission-input { margin: 0; padding: 0.6rem 0.75rem; max-height: 30vh; overflow: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; }
+.empty .quiet-link + .quiet-link { margin-left: 1rem; }
+.claude-form textarea { width: 100%; }
+.claude-run-running .card-meta span:nth-child(2) { color: var(--ink); font-weight: 600; }

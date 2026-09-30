@@ -1,0 +1,42 @@
+<% content_for :title, "Ask Claude" %>
+<main class="maintenance-view">
+  <nav class="maint-nav"><%= link_to "← Stack", root_path %><%= link_to "Maintenance", maintenance_path %></nav>
+  <h1>Ask Claude</h1>
+  <p class="hint">Runs Claude Code on the Mac, on your Claude plan. Its reply lands in the stack; reply on that card to keep going. When it wants to run a command or edit a file, it asks you with an Allow card and waits.</p>
+
+  <%= form_with url: claude_path, class: "stack-form claude-form" do |f| %>
+    <%= f.label :place, "Where" %>
+    <%= f.select :place, @places %>
+    <%= f.label :prompt, "What should Claude do?" %>
+    <%= f.text_area :prompt, rows: 5, required: true, placeholder: "Find out why the nightly backup failed and fix it." %>
+    <%= f.submit "Ask Claude", class: "tool-send" %>
+  <% end %>
+  <% if @places.one? %>
+    <p class="hint">No projects found. Set <code>STACK_PROJECT_DIRS</code> to the folders your git projects live in (default <code>~/code</code>).</p>
+  <% end %>
+
+  <% if @runs.any? %>
+    <h2>Recent</h2>
+    <ul class="maint-list">
+      <% @runs.each do |run| %>
+        <li class="maint-card claude-run claude-run-<%= run.state %>">
+          <div class="card-meta">
+            <span class="card-source"><%= run.project %></span>
+            <span><%= run.state %></span>
+            <time datetime="<%= run.created_at.iso8601 %>"><%= time_ago_in_words(run.created_at) %> ago</time>
+            <% if run.cost_usd %><span>$<%= format("%.2f", run.cost_usd) %></span><% end %>
+          </div>
+          <p class="maint-summary"><%= run.prompt.truncate(160) %></p>
+          <% if run.error.present? %><p class="hint flash-alert"><%= run.error.truncate(300) %></p><% end %>
+          <div class="maint-actions">
+            <% if run.running? %>
+              <%= button_to "Stop", stop_claude_run_path(run), class: "danger", data: { turbo_confirm: "Stop this run?" } %>
+            <% elsif run.result_card %>
+              <span class="hint">Reply: <%= run.result_card.summary.truncate(80) %> (<%= run.result_card.state %>)</span>
+            <% end %>
+          </div>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+</main>

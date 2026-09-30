@@ -1,0 +1,7 @@
+<% input = card.payload["tool_input"] || {} %>
+<div class="tool tool-permission">
+  <p class="tool-label">Claude wants to use <strong><%= card.payload["tool_name"] %></strong><%= " in #{card.project}" if card.project.present? %></p>
+  <pre class="permission-input"><%= input["command"].presence || input["file_path"].presence || JSON.pretty_generate(input) %></pre>
+  <% if input["command"].present? && input["description"].present? %><p class="hint"><%= input["description"] %></p><% end %>
+</div>
+<%= render "cards/types/generic", card: card %>

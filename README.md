@@ -3,7 +3,9 @@
 The world is concurrent; Bobby's attention is single-threaded. The Stack is the
 serializer in between: everything pulling at him (Claude Code agents finishing,
 email, calendar invitations, reminders, anything else that can POST) becomes
-one index card in front of him, and a secretary decides which one.
+one index card in front of him, and a secretary decides which one. It's also
+where he talks to Claude: chats and project sessions start from onbox, and
+their replies come back as cards.
 
 Rails 8, omakase: SQLite, Solid Queue / Cache / Cable, Hotwire, importmap,
 Propshaft. It runs natively on the Mac Studio and is reached from the phone
@@ -13,7 +15,9 @@ over Tailscale.
 
 | Source | How it arrives | What handling it does |
 |---|---|---|
-| Claude Code | Stop and Notification hooks (`script/stack-hook`) | Sends your instruction back to the session (`claude --resume … -p`) on your Max plan |
+| Claude (from onbox) | **Ask Claude** starts a chat or a project session on the Mac | Your reply continues the session; permission prompts are Allow/Deny cards |
+| Claude Code | Stop and Notification hooks (`script/stack-hook`), and the stack tools | Sends your instruction back to the session on your Max plan |
+| Claude desktop app | The stack tools (`post_to_stack`, `check_stack`) | Claude reads your answer with `check_stack` |
 | Mail (the Mac's) | Read every 2 minutes through Mail's scripting | Replies in the thread, archives it, or marks it read; mail you read in Mail clears its card |
 | Calendar (the Mac's) | Read every 2 minutes through EventKit | Invitations you answer in Calendar clear themselves; moves and cancellations are heads-ups |
 | Reminders (the Mac's) | Read every 2 minutes through EventKit | Done completes the reminder; Later moves its due time |
@@ -110,9 +114,54 @@ threshold can be tuned from real cards. `/secretary` shows whether the Judge is
 reachable and lists its model, with a **Test** button. The stack's order stays
 positional; the Judge only chooses between "front" and where new cards land.
 
+### Claude from onbox
+
+**Ask Claude** (on the empty stack and in maintenance) starts Claude Code on the
+Mac, on your login and Max plan: a **chat** (a scratch folder under
+`storage/claude/chat`, each chat its own session) or a session in one of your
+**projects** (git repositories one level under `STACK_PROJECT_DIRS`, default
+`~/code`; only those can be picked). It runs headless (`claude -p`) in its own
+process group, so an onbox restart doesn't stop it, and its reply lands as an
+agent card when it finishes. Replying on the card resumes the session in the
+same folder, the same way, including for sessions that arrived through the
+hooks. A failed turn comes back as a card. The Ask Claude page lists recent
+runs, what they cost, and a **Stop** button for running ones.
+
+When a run wants to use a tool its settings don't already allow (run a
+command, edit a file), it asks through the stack: an **Allow** card goes to
+the front with the command or file, and the run waits (up to a week) for your
+answer. **Allow** lets it; **Deny** (with a reason, or what to do instead)
+tells Claude so. `STACK_CLAUDE_PERMISSION_MODE` (e.g. `acceptEdits`) sets how
+much is allowed without asking; project `.claude/settings.json` allowlists
+work as usual.
+
+### The stack tools, for any Claude
+
+`script/stack-mcp` is a small MCP server (Ruby standard library only) that
+gives Claude two tools: **post_to_stack** puts a card in front of you (a
+decision, a reply, a review, or news that a long job finished) and
+**check_stack** reads what you did with it. Runs onbox starts also get
+**approve**, the permission prompt tool above.
+
+`bin/rails stack:connect` (in production on the Mac, with `STACK_SELF_URL` set
+to how onbox is reached locally) connects everything on this Mac, backing up
+each file it changes and never printing the token:
+
+- Claude Code: the Stop/Notification hook and `STACK_URL`/`STACK_TOKEN` in
+  `~/.claude/settings.json`, the stack tools for every session (`claude mcp
+  add-json --scope user`), and a standing instruction in `~/.claude/CLAUDE.md`
+  to post when it needs you or finishes something long.
+- The Claude desktop app: the stack tools in `claude_desktop_config.json`
+  (reopen the app). Add the same standing instruction under Settings →
+  Profile so chats use them.
+
+Chats on claude.ai in a browser or on the phone run on Anthropic's servers
+and can't reach a tailnet-only onbox; start those from onbox instead.
+
 ### Claude Code hooks
 
-Add the hooks to `~/.claude/settings.json` (see `script/claude-settings.example.json`):
+`bin/rails stack:connect` sets these up. By hand, add them to
+`~/.claude/settings.json` (see `script/claude-settings.example.json`):
 
 ```json
 {
@@ -130,7 +179,8 @@ Stop refreshes it and puts it back on top. When the hook input has no last
 assistant message, the intake reads it from `transcript_path`. When you send an
 instruction, the next Stop brings the result back as a fresh card; a failed send
 comes back as a card too. The secretary's own `claude` runs are marked
-`STACK_INTERNAL=1`, which the hook ignores.
+`STACK_INTERNAL=1`, and runs onbox starts `STACK_LAUNCHED=1`; the hook ignores
+both (onbox reads those replies itself).
 
 ### Mail
 
@@ -251,6 +301,10 @@ otherwise after your next gesture. Idle periods get nothing.
 | `STACK_JUDGE_URL` / `STACK_JUDGE_MODEL` / `STACK_JUDGE_THRESHOLD` | unset (off) / `openjev-latest` / `0.8` | The OpenJev server beside the secretary, its model, and how sure an answer must be to count |
 | `STACK_CLAUDE_BIN` / `STACK_CLAUDE_MODEL` | `claude` / CLI default | The claude CLI, and the model for the secretary's Claude runs |
 | `STACK_AGENT_COMMAND` | `{claude} --resume {session_id} -p {instruction}` | How an instruction reaches a session; placeholders are substituted per argument, never through a shell |
+| `STACK_PROJECT_DIRS` | `~/code` | Colon-separated folders whose git projects Ask Claude offers |
+| `STACK_SELF_URL` | `http://127.0.0.1:$PORT` | How Claude's hook and stack tools reach onbox on this Mac |
+| `STACK_CLAUDE_PERMISSION_MODE` | Claude Code's default | Permission mode for runs onbox starts, e.g. `acceptEdits` |
+| `STACK_CLAUDE_APPROVALS` | on | `off` to leave permission prompts to Claude Code's own settings (denied in headless runs) |
 | `STACK_EVENTKIT_BIN` | `tmp/bin/onbox-eventkit`, built on first use | A prebuilt Mac helper (Calendar, Reminders, Mail) to use instead |
 | `STACK_REMINDERS_LIST` | `Stack` | Reminders list that lands whole (also on `/sources`) |
 | `STACK_DIGEST_CARDS` | `daily,weekly,monthly` | Which digests become cards |
@@ -291,6 +345,12 @@ otherwise after your next gesture. Idle periods get nothing.
 - The noticer matches phrases exactly after normalizing, so it won't see that
   "PR and merge" and "open a PR then merge" are the same request.
 - Not built: noticing when grooming time outruns handling time.
+- Claude chats on claude.ai (web, phone) and cloud Claude Code sessions can't
+  reach a tailnet-only onbox; only Claude on this Mac (desktop app, Claude
+  Code) posts to the stack.
+- Permission prompts become cards only for runs onbox starts. A session in a
+  terminal still asks in the terminal (its Notification hook makes a card
+  saying so).
 - The Judge reads only new cards' fronts. The noticer ("should I offer a
   stamp for this?") and the digests' "what needs you" don't ask it yet.
 
