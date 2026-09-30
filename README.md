@@ -234,7 +234,7 @@ otherwise after your next gesture. Idle periods get nothing.
 | `STACK_PASSWORD` / `STACK_USER` | unset / `bobby` | Optional HTTP basic auth on the views; Tailscale is the main perimeter |
 | `STACK_SECRETARY` / `STACK_SECRETARY_DEEP` | `local` / `claude_code` | Backend per tier: `local`, `claude_code`, `off` |
 | `STACK_SECRETARY_URL` / `STACK_SECRETARY_MODEL` | `https://chat.bobbymeyer.com/v1` / — | The local, OpenAI-compatible model |
-| `STACK_JUDGE_URL` / `STACK_JUDGE_MODEL` / `STACK_JUDGE_THRESHOLD` | unset (off) / `jev-latest` / `0.8` | The OpenJev server beside the secretary, its model, and how sure an answer must be to count |
+| `STACK_JUDGE_URL` / `STACK_JUDGE_MODEL` / `STACK_JUDGE_THRESHOLD` | unset (off) / `openjev-latest` / `0.8` | The OpenJev server beside the secretary, its model, and how sure an answer must be to count |
 | `STACK_CLAUDE_BIN` / `STACK_CLAUDE_MODEL` | `claude` / CLI default | The claude CLI, and the model for the secretary's Claude runs |
 | `STACK_AGENT_COMMAND` | `{claude} --resume {session_id} -p {instruction}` | How an instruction reaches a session; placeholders are substituted per argument, never through a shell |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Gmail's OAuth client, if not entered on `/sources` |

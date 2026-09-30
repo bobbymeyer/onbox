@@ -25,7 +25,7 @@ module Judge
   module_function
 
   def url = ENV["STACK_JUDGE_URL"].presence&.chomp("/")&.delete_suffix("/v1")
-  def model = ENV.fetch("STACK_JUDGE_MODEL", "jev-latest")
+  def model = ENV.fetch("STACK_JUDGE_MODEL", "openjev-latest")
   def threshold = ENV.fetch("STACK_JUDGE_THRESHOLD", "0.8").to_f
   def enabled? = url.present?
 
@@ -103,8 +103,11 @@ module Judge
   end
 
   # { "reachable" => bool, "models" => [...], "model_ready" => bool }
+  # OpenJev lists {"models": [{"name": ...}]}; an OpenAI-style
+  # {"data": [{"id": ...}]} is read too.
   def status
-    models = Array(request(:get, "v1/models")["data"]).map { |m| m["id"] }
+    listing = request(:get, "v1/models")
+    models = Array(listing["models"]).map { |m| m["name"] } + Array(listing["data"]).map { |m| m["id"] }
     { "reachable" => true, "models" => models, "model_ready" => models.include?(model) }
   rescue Error => e
     { "reachable" => false, "error" => e.message }

@@ -24,7 +24,7 @@ class JudgeTest < ActiveSupport::TestCase
       Judge.front(@card, stamps: Stamp.for_card(@card).by_use.pluck(:label), directives: [ @receipts, @outages ])
     end
 
-    assert_equal "jev-latest", sent[:model]
+    assert_equal "openjev-latest", sent[:model]
     assert_match "Printer is out of toner", sent[:state]
     assert_equal "choice", sent[:questions]["ask"][:type]
     assert_equal "decision", reading["ask"]
@@ -87,9 +87,13 @@ class JudgeTest < ActiveSupport::TestCase
     assert @card.digested_at
   end
 
-  test "status lists the models and whether ours is among them" do
-    stub(Judge, :request, ->(*) { { "data" => [ { "id" => "jev-latest" } ] } }) do
-      with_env(JUDGE) { assert_equal [ true, true ], Judge.status.values_at("reachable", "model_ready") }
+  test "status reads OpenJev's model list, and an OpenAI-style one" do
+    { { "models" => [ { "name" => "openjev-latest" }, { "name" => "laya" } ] } => [ %w[openjev-latest laya], true ],
+      { "data" => [ { "id" => "openjev-latest" } ] } => [ %w[openjev-latest], true ],
+      { "models" => [ { "name" => "laya" } ] } => [ %w[laya], false ] }.each do |listing, (models, ready)|
+      stub(Judge, :request, ->(*) { listing }) do
+        with_env(JUDGE) { assert_equal [ true, models, ready ], Judge.status.values_at("reachable", "models", "model_ready") }
+      end
     end
   end
 
@@ -108,7 +112,7 @@ class JudgeTest < ActiveSupport::TestCase
           end
           [ key, answer ]
         end
-        { "model" => "jev-latest", "answers" => answers }
+        { "model" => "openjev-latest", "answers" => answers }
       end
       stub(Judge, :request, reply, &block)
     end

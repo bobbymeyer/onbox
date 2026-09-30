@@ -126,7 +126,7 @@ class JudgeControllerTest < ActionDispatch::IntegrationTest
     with_fake_openjev do |url|
       with_env("STACK_JUDGE_URL" => url) do
         get secretary_url
-        assert_select "#judge + .maint-card", /jev-latest at #{Regexp.escape(url)}.*Ready\./m
+        assert_select "#judge + .maint-card", /openjev-latest at #{Regexp.escape(url)}.*Ready\./m
 
         post test_judge_url
         follow_redirect!
@@ -159,7 +159,7 @@ class JudgeControllerTest < ActionDispatch::IntegrationTest
           end
           body = JSON.parse(client.read(length)) if length.positive?
           reply = if request_line.include?("/v1/models")
-            { "data" => [ { "id" => "jev-latest" } ] }
+            { "models" => [ { "name" => "openjev-latest" } ] }
           else
             { "model" => body["model"], "answers" => body["questions"].transform_values { { "noul" => 0.03 } } }
           end.to_json
