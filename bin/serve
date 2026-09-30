@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs onbox for real on the Mac: production mode, with Solid Queue in the
-# same process so polling (Gmail, Calendar, Reminders), digests and timed
+# same process so polling (Mail, Calendar, Reminders), digests and timed
 # wake-ups happen. Pass-through arguments go to `rails server` (e.g. -p 3000).
 set -e
 cd "$(dirname "$0")/.."

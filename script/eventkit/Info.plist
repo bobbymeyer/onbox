@@ -14,5 +14,7 @@
   <string>onbox turns due reminders into cards and completes them when you're done.</string>
   <key>NSRemindersFullAccessUsageDescription</key>
   <string>onbox turns due reminders into cards and completes them when you're done.</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>onbox turns unread mail into cards, and sends, archives or marks read what you handle.</string>
 </dict>
 </plist>

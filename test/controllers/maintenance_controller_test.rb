@@ -290,18 +290,15 @@ class CalendarFlowTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "choosing the Reminders list and connecting Gmail from the web" do
+  test "choosing the Reminders list from the web" do
     patch source_url(sources(:reminders)), params: { source: { reminders_list: "Inbox" } }
     assert_equal "Inbox", MacReminders::Sync.list_name(sources(:reminders).reload)
+  end
 
-    post google_client_sources_url, params: { client_id: "cid", client_secret: "secret" }
-    get connect_source_url(sources(:gmail))
-    assert_select "a.login-link[href*=?]", "accounts.google.com"
-    with_stub(GoogleOauth, :exchange, "refresh-token") do
-      with_stub(Gmail::Sync, :call, []) do
-        post authorize_source_url(sources(:gmail)), params: { pasted: "http://localhost:8765/?code=x" }
-      end
+  test "allowing Mail from the web asks for Automation" do
+    with_stub(MacEventKit, :request_access, { "mail" => "denied" }) do
+      post allow_source_url(sources(:mail))
     end
-    assert_equal "refresh-token", sources(:gmail).reload.secret
+    assert_match "macOS says denied for mail. Allow it in System Settings → Privacy & Security → Automation", flash[:alert]
   end
 end

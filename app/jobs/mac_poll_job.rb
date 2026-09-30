@@ -1,4 +1,4 @@
-# Reads the Mac's Calendar and Reminders into the stack.
+# Reads the Mac's Mail, Calendar and Reminders into the stack.
 class MacPollJob < ApplicationJob
   queue_as :default
 

@@ -56,7 +56,3 @@ group :test do
   gem "capybara"
   gem "selenium-webdriver"
 end
-
-
-gem "google-apis-gmail_v1", "~> 0.53.0"
-gem "googleauth", "~> 1.17"

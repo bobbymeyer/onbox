@@ -10,11 +10,11 @@ printer:
   card_type: generic
   token: printer-test-token
 
-gmail:
-  name: gmail
+mail:
+  name: mail
   kind: email
   card_type: email
-  token: gmail-test-token
+  token: mail-test-token
   settings: {}
 
 calendar:

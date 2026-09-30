@@ -14,7 +14,7 @@ over Tailscale.
 | Source | How it arrives | What handling it does |
 |---|---|---|
 | Claude Code | Stop and Notification hooks (`script/stack-hook`) | Sends your instruction back to the session (`claude --resume … -p`) on your Max plan |
-| Gmail | Polled every 2 minutes | Replies in the thread, or archives it |
+| Mail (the Mac's) | Read every 2 minutes through Mail's scripting | Replies in the thread, archives it, or marks it read; mail you read in Mail clears its card |
 | Calendar (the Mac's) | Read every 2 minutes through EventKit | Invitations you answer in Calendar clear themselves; moves and cancellations are heads-ups |
 | Reminders (the Mac's) | Read every 2 minutes through EventKit | Done completes the reminder; Later moves its due time |
 | Anything else | `POST /intake` with a source token | Whatever the card says |
@@ -132,25 +132,37 @@ instruction, the next Stop brings the result back as a fresh card; a failed send
 comes back as a card too. The secretary's own `claude` runs are marked
 `STACK_INTERNAL=1`, which the hook ignores.
 
-### Gmail
+### Mail
 
-1. In Google Cloud Console, create a project, enable the **Gmail API**, and
-   create an OAuth client of type **Desktop app**. If the consent screen is in
-   testing mode, add yourself as a test user (testing-mode tokens expire after
-   7 days; publish the app, still unverified, to keep them).
-2. On `/sources`, paste the client ID and secret under **Google** (stored
-   encrypted; or set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`).
-3. On the `gmail` source, **Connect** → **Sign in with Google** → allow. Google
-   then sends the browser to a `localhost` address that won't load; copy that
-   address, paste it into onbox, **Connect**. (`bin/rails gmail:connect[gmail]`
-   does the same from a terminal.)
+onbox reads the Mac's Mail, so every account Mail has (Gmail, iCloud, work)
+comes through with no sign-in of its own. It uses the same helper as Calendar
+and Reminders (below), which talks to Mail through Mail's scripting interface.
+On `/sources`, tap **Allow access to Mail** on the `mail` source and click OK
+when macOS asks whether onbox may control Mail (System Settings → Privacy &
+Security → Automation lists it afterwards). Mail has to be running; the helper
+opens it, hidden, when it isn't.
 
-Each thread holds one open card: sender and subject on the front, the
-secretary's drafted reply as the proposed action, the message on the back.
-**Send reply** (or **Approve**) replies in the thread; **Archive** archives it.
-The scope is `gmail.modify` (no permanent delete). Which mail becomes a card is
-a Gmail search, `in:inbox category:primary` by default, editable on `/sources`.
-Mail from someone emits `gmail:from:<address>`, so "later, until Ada replies"
+New unread mail in any inbox becomes a card, one per thread (threads follow
+the References header): sender and subject on the front, the secretary's
+drafted reply as the proposed action, the message on the back. Mail from the
+day before the first read onwards counts, even when Mail downloads it late;
+older unread mail stays in Mail. Junk never becomes a card, and neither do
+newsletters and mailing lists (a List-Unsubscribe, List-Id, Precedence: bulk
+or Auto-Submitted header) unless you tick **Newsletters and mailing lists
+become cards too** on `/sources`.
+
+The inbox and the stack keep step:
+
+- **Send reply** (or **Approve**) sends the reply in the thread, from the
+  account it arrived on, and marks the message read.
+- **Archive** marks it read and moves it to the account's Archive (All Mail on
+  Gmail).
+- Any other way of handling the card (**Done**, a stamp, an empty reply) marks
+  it read.
+- Reading, archiving or deleting the message in Mail clears its card.
+- **Later** leaves it unread in Mail.
+
+Mail from someone emits `mail:from:<address>`, so "later, until Ada replies"
 wakes the card when she does.
 
 ### Calendar and Reminders
@@ -158,11 +170,13 @@ wakes the card when she does.
 onbox reads the Mac's Calendar (which already syncs your Google calendars) and
 Reminders through a small Swift helper using EventKit (`script/eventkit/`). It
 builds the helper on first use, so the Mac needs the Xcode command line tools
-(`xcode-select --install`). On `/sources`, tap **Allow access** on the
-`calendar` and `reminders` sources and click Allow in the macOS prompt. If no
-prompt appears (a server started by launchd can't show one), run
-`tmp/bin/onbox-eventkit request` once in Terminal, or allow it in System
-Settings → Privacy & Security.
+(`xcode-select --install`); set `STACK_EVENTKIT_BIN` to keep a built helper
+outside the checkout. On `/sources`, tap **Allow access** on the `calendar`,
+`reminders` and `mail` sources and allow each macOS prompt. If no prompt
+appears, run `onbox-eventkit request calendar` (or `reminders`, or `mail`)
+once in a logged-in session, or allow it in System Settings → Privacy &
+Security. macOS ties each permission to the helper as built, so a rebuilt
+helper may need allowing again.
 
 **Calendar** makes a decision card for each invitation you haven't answered (one
 per series), with when, where, any clash with a meeting you're going to, and the
@@ -237,7 +251,7 @@ otherwise after your next gesture. Idle periods get nothing.
 | `STACK_JUDGE_URL` / `STACK_JUDGE_MODEL` / `STACK_JUDGE_THRESHOLD` | unset (off) / `openjev-latest` / `0.8` | The OpenJev server beside the secretary, its model, and how sure an answer must be to count |
 | `STACK_CLAUDE_BIN` / `STACK_CLAUDE_MODEL` | `claude` / CLI default | The claude CLI, and the model for the secretary's Claude runs |
 | `STACK_AGENT_COMMAND` | `{claude} --resume {session_id} -p {instruction}` | How an instruction reaches a session; placeholders are substituted per argument, never through a shell |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Gmail's OAuth client, if not entered on `/sources` |
+| `STACK_EVENTKIT_BIN` | `tmp/bin/onbox-eventkit`, built on first use | A prebuilt Mac helper (Calendar, Reminders, Mail) to use instead |
 | `STACK_REMINDERS_LIST` | `Stack` | Reminders list that lands whole (also on `/sources`) |
 | `STACK_DIGEST_CARDS` | `daily,weekly,monthly` | Which digests become cards |
 | `STACK_ACTIVE_MINUTES` | `30` | How recently you must have worked a card to count as still working |
@@ -258,7 +272,7 @@ otherwise after your next gesture. Idle periods get nothing.
   noticer and the digests read it.
 - **Secretary** (`app/models/secretary.rb`): schemas and prompts per duty,
   routed to a backend by tier (`app/models/secretary/backends/`).
-- Intake is one endpoint (`IntakeController`); pollers (`Gmail::Sync`,
+- Intake is one endpoint (`IntakeController`); pollers (`MacMail::Sync`,
   `MacCalendar::Sync`, `MacReminders::Sync`) feed the same `Intake.receive`.
 
 ## Known gaps
@@ -268,7 +282,9 @@ otherwise after your next gesture. Idle periods get nothing.
   `send-keys` command via `STACK_AGENT_COMMAND` is the likely fix.
 - No `claude agents --json` reconciliation yet: a card for a session you
   answered at the terminal stays until its next Stop.
-- Gmail is polled, not pushed (push needs a public URL).
+- Mail is polled every 2 minutes, not pushed.
+- Mail's own categories (Primary, Promotions…) aren't readable from its
+  scripting, so newsletters are told apart by their headers instead.
 - Invitations can't be answered from onbox (Apple has no API for it).
 - The secretary places a card when it arrives or when asked; it doesn't yet
   re-judge the whole order as things change.

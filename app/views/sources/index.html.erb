@@ -11,31 +11,19 @@
           <span><%= source.card_type %> cards</span>
         </div>
         <p class="maint-summary"><%= source.name %></p>
-        <% if source.google? %>
+        <% if source.mac? %>
           <% if source.connected? %>
             <p class="hint">
-              Connected. <%= source.last_polled_at ? "Last checked #{time_ago_in_words(source.last_polled_at)} ago." : "Not checked yet." %>
+              Reading the Mac's <%= source.mac_app %>.
+              <%= source.last_polled_at ? "Last checked #{time_ago_in_words(source.last_polled_at)} ago." : "Not checked yet." %>
             </p>
             <% if source.last_error %><p class="hint flash-alert"><%= source.last_error %></p><% end %>
             <% if source.email? %>
               <%= form_with model: source, class: "stack-form inline-form" do |f| %>
-                <%= f.label :email_query, "Gmail search for new cards" %>
-                <%= f.text_field :email_query, value: source.email_query %>
-                <%= f.submit "Save search" %>
+                <label><%= f.check_box :include_bulk, checked: MacMail::Sync.include_bulk?(source) %> Newsletters and mailing lists become cards too</label>
+                <%= f.submit "Save" %>
               <% end %>
-            <% end %>
-          <% else %>
-            <p class="hint">Not connected. <%= link_to "Connect #{source.name} to Google", connect_source_path(source) %></p>
-          <% end %>
-        <% end %>
-        <% if source.mac? %>
-          <% if source.connected? %>
-            <p class="hint">
-              Reading the Mac's <%= source.calendar? ? "Calendar" : "Reminders" %>.
-              <%= source.last_polled_at ? "Last checked #{time_ago_in_words(source.last_polled_at)} ago." : "Not checked yet." %>
-            </p>
-            <% if source.last_error %><p class="hint flash-alert"><%= source.last_error %></p><% end %>
-            <% unless source.calendar? %>
+            <% elsif source.kind == "reminders" %>
               <%= form_with model: source, class: "stack-form inline-form" do |f| %>
                 <%= f.label :reminders_list, "List that lands in the stack whole (due reminders from any list always do)" %>
                 <%= f.text_field :reminders_list, value: MacReminders::Sync.list_name(source) %>
@@ -43,9 +31,9 @@
               <% end %>
             <% end %>
           <% elsif MacEventKit.available? %>
-            <p class="hint">Not allowed yet. <%= button_to "Allow access to #{source.calendar? ? "Calendar" : "Reminders"}", allow_source_path(source), class: "defer-button", form_class: "inline-button" %> macOS asks on the Mac's screen; click Allow there.</p>
+            <p class="hint">Not allowed yet. <%= button_to "Allow access to #{source.mac_app}", allow_source_path(source), class: "defer-button", form_class: "inline-button" %> macOS asks on the Mac's screen; click Allow there.</p>
           <% else %>
-            <p class="hint">Reads the Mac's <%= source.calendar? ? "Calendar" : "Reminders" %> when onbox runs on the Mac.</p>
+            <p class="hint">Reads the Mac's <%= source.mac_app %> when onbox runs on the Mac.</p>
           <% end %>
         <% end %>
         <details>
@@ -56,18 +44,12 @@
         <div class="maint-actions">
           <% if source.connected? %>
             <%= button_to "Check now", poll_source_path(source) %>
-            <% if source.google? %><%= link_to "Reconnect", connect_source_path(source) %><% end %>
           <% end %>
           <%= button_to "Delete", source_path(source), method: :delete, class: "danger", data: { turbo_confirm: "Delete #{source.name}? Its cards stay." } %>
         </div>
       </li>
     <% end %>
   </ul>
-
-  <% if Source.google.exists? %>
-    <h2>Google</h2>
-    <%= render "sources/google_client" %>
-  <% end %>
 
   <h2>New source</h2>
   <%= form_with model: @source, class: "stack-form" do |f| %>

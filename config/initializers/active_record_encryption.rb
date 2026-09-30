@@ -1,4 +1,4 @@
-# Source secrets (the Gmail refresh token) are encrypted at rest. Keys come
+# Secrets onbox holds (the Claude Code token) are encrypted at rest. Keys come
 # from credentials when set there, otherwise they are derived from
 # secret_key_base so a fresh install needs no extra setup.
 Rails.application.config.after_initialize do

@@ -151,6 +151,8 @@ class MacEventKitTest < ActiveSupport::TestCase
       #!/bin/sh
       case "$1" in
         access) echo '{"calendar":"granted","reminders":"denied"}' ;;
+        mail-access) echo '{"mail":"granted"}' ;;
+        mail-unread) sleep 5 ;;
         events) echo "[{\\"event_id\\":\\"e1\\",\\"from\\":\\"$2\\"}]" ;;
         *) echo "no reminder $2" >&2; exit 1 ;;
       esac
@@ -162,6 +164,8 @@ class MacEventKitTest < ActiveSupport::TestCase
       assert_not MacEventKit.granted?("reminders")
       assert_equal "2026-09-29T10:00:00Z", MacEventKit.events(from: Time.utc(2026, 9, 29, 10), to: Time.utc(2026, 9, 30)).sole["from"]
       assert_raises(MacEventKit::Error, match: /no reminder x/) { MacEventKit.complete("x") }
+      assert MacEventKit.granted?("mail")
+      assert_raises(MacEventKit::Error, match: /didn't answer mail-unread within 1s/) { MacEventKit.run("mail-unread", timeout: 1) }
     end
   ensure
     FileUtils.rm_f(helper)
@@ -183,7 +187,7 @@ class MacPollJobTest < ActiveSupport::TestCase
     with_stub(MacEventKit, :available?, true) do
       with_stub(MacEventKit, :granted?, false) { MacPollJob.perform_now }
     end
-    assert_match "[mac] skipped calendar, reminders: not allowed in macOS", log.string
+    assert_match "[mac] skipped calendar, mail, reminders: not allowed in macOS", log.string
   ensure
     Rails.logger = original
   end

@@ -27,38 +27,15 @@ end
 class ActiveSupport::TestCase
   def email_payload(**overrides)
     {
-      "message_id" => "m1", "thread_id" => "t1", "rfc822_message_id" => "<abc@mail.example>",
+      "message_id" => "m1@mail.example", "thread_id" => "t1@mail.example",
       "from" => "Ada Lovelace <ada@example.com>", "to" => "bobby@bobbymeyer.com",
-      "subject" => "Dinner Thursday?", "snippet" => "Are you free", "labels" => [ "INBOX", "UNREAD" ],
+      "subject" => "Dinner Thursday?", "account" => "iCloud", "mailbox" => "INBOX", "bulk" => false,
       "body" => "Are you free Thursday at 7?"
     }.merge(overrides.stringify_keys)
   end
 
   def email_card(**overrides)
-    Intake.receive(sources(:gmail), email_payload(**overrides)).reload
-  end
-
-  def connect(source)
-    source.update!(secret: "refresh-token")
-    source
-  end
-
-  # Stands in for Gmail::Mailbox.
-  class FakeMailbox
-    attr_reader :calls
-
-    def initialize(messages = [])
-      @messages = messages
-      @calls = []
-    end
-
-    def messages(query:, after:)
-      @calls << [ :messages, query, after ]
-      @messages
-    end
-
-    def reply(payload, text) = @calls << [ :reply, payload["thread_id"], text ]
-    def archive(thread_id) = @calls << [ :archive, thread_id ]
+    Intake.receive(sources(:mail), email_payload(**overrides)).reload
   end
 end
 
@@ -99,17 +76,30 @@ class ActiveSupport::TestCase
 
   # Stands in for MacEventKit: canned events and reminders, and a log of calls.
   class FakeKit
-    attr_accessor :events_list, :reminders_list
+    attr_accessor :events_list, :reminders_list, :mail_list
     attr_reader :calls
 
-    def initialize(events: [], reminders: [])
-      @events_list, @reminders_list, @calls = events, reminders, []
+    def initialize(events: [], reminders: [], mail: [])
+      @events_list, @reminders_list, @mail_list, @calls = events, reminders, mail, []
     end
+
+    # mail: full messages as the helper gives them, plus "read" and "junk".
+    def mail_unread = @mail_list.reject { |m| m["read"] }.map { |m| m.slice("message_id", "received").merge("junk" => m["junk"] || false) }
+    def mail_messages(ids) = (@calls << [ :mail_messages, ids ]) && @mail_list.select { |m| ids.include?(m["message_id"]) }
 
     def events(from:, to:) = @events_list
     def reminders = @reminders_list
     def complete(id) = @calls << [ :complete, id ]
     def reschedule(id, time) = @calls << [ :reschedule, id, time ]
+  end
+
+  # A message as the Mac helper reports it.
+  def mail_message(**overrides)
+    { "message_id" => "m1@mail.example", "subject" => "Dinner Thursday?", "from" => "Ada Lovelace <ada@example.com>",
+      "reply_to" => "", "to" => "bobby@bobbymeyer.com", "cc" => "", "received" => "2026-09-30T09:00:00.000Z",
+      "account" => "iCloud", "mailbox" => "INBOX", "read" => false,
+      "headers" => "Message-ID: <m1@mail.example>\nFrom: Ada Lovelace <ada@example.com>\nSubject: Dinner Thursday?\n",
+      "body" => "Are you free Thursday at 7?" }.merge(overrides.stringify_keys)
   end
 
   def reminder(**overrides)

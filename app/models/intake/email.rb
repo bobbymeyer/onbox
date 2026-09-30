@@ -1,5 +1,5 @@
 module Intake
-  # One email, already flattened (see Gmail::Message). The thread is the card's
+  # One email, already flattened (see MacMail::Message). The thread is the card's
   # key, so a thread holds one open card and a new message refreshes it.
   module Email
     def self.call(source, payload)

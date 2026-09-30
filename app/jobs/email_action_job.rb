@@ -1,18 +1,16 @@
-# Carries out an email card's action in Gmail: send the reply in its thread,
-# or archive the thread. Failures come back as cards.
+# Carries out an email card's action in the Mac's Mail: send the reply in its
+# thread, archive it, or mark it read. Failures come back as cards.
 class EmailActionJob < ApplicationJob
   queue_as :default
 
   def perform(card, kind, text = nil)
-    source = card.source
-    return card.report_failure!("Couldn't #{kind} email: no connected mailbox", "", text: text) unless source&.connected?
-
-    mailbox = Gmail::Mailbox.new(source)
+    id = card.payload["message_id"] or return
     case kind
-    when "reply" then mailbox.reply(card.payload, text)
-    when "archive" then mailbox.archive(card.payload["thread_id"])
+    when "reply" then MacEventKit.mail_reply(id, text)
+    when "archive" then MacEventKit.mail_archive(id)
+    when "read" then MacEventKit.mail_read(id)
     end
-  rescue Google::Apis::Error, Signet::AuthorizationError => e
-    card.report_failure!("Couldn't #{kind} \"#{card.summary}\"", "#{e.class}: #{e.message}", text: text)
+  rescue MacEventKit::Error => e
+    card.report_failure!("Couldn't #{kind == "read" ? "mark read" : kind} \"#{card.summary}\" in Mail", e.message, text: text)
   end
 end

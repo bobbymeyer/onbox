@@ -57,11 +57,14 @@ class CardType
     def actions = %w[reply instruct archive]
     def primary_action = "reply"
 
-    # "instruct" on an email means send the drafted reply, so "Approve" works here too.
+    # "instruct" on an email means send the drafted reply, so "Approve" works
+    # here too. Handling it any other way marks it read in Mail, so the inbox
+    # keeps step with the stack.
     def perform(kind, card, text)
       case kind
-      when "reply", "instruct" then EmailActionJob.perform_later(card, "reply", text) if text.present?
+      when "reply", "instruct" then EmailActionJob.perform_later(card, text.present? ? "reply" : "read", text.presence)
       when "archive" then EmailActionJob.perform_later(card, "archive", nil)
+      else EmailActionJob.perform_later(card, "read", nil)
       end
     end
   end

@@ -55,16 +55,19 @@ class DispenserControllerTest < ActionDispatch::IntegrationTest
 end
 
 class SourcesControllerTest < ActionDispatch::IntegrationTest
-  test "saves an email source's search" do
-    source = connect(sources(:gmail))
-    patch source_url(source), params: { source: { email_query: "in:inbox is:important" } }
-    assert_redirected_to sources_url
-    assert_equal "in:inbox is:important", source.reload.email_query
-  end
+  test "Mail's source says what it needs, and saves whether newsletters count" do
+    with_env("STACK_EVENTKIT_BIN" => "/nonexistent") do
+      get sources_url
+      assert_select "button", "Allow access to Mail"
+    end
 
-  test "shows connection state" do
-    get sources_url
-    assert_select "a[href=?]", connect_source_path(sources(:gmail)), "Connect gmail to Google"
+    with_stub(MacEventKit, :granted?, true) do
+      get sources_url
+      assert_select "input[type=checkbox][name='source[include_bulk]']"
+      patch source_url(sources(:mail)), params: { source: { include_bulk: "1" } }
+    end
+    assert_redirected_to sources_url
+    assert MacMail::Sync.include_bulk?(sources(:mail).reload)
   end
 
   test "email cards render a reply box addressed to the sender" do

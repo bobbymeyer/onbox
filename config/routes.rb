@@ -40,12 +40,9 @@ Rails.application.routes.draw do
   resources :sources, only: [ :index, :create, :update, :destroy ] do
     member do
       post :poll
-      get :connect
-      post :authorize
       post :allow
       post :rotate
     end
-    post :google_client, on: :collection
   end
 
   get "up" => "rails/health#show", as: :rails_health_check
