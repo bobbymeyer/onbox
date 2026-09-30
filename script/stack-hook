@@ -1,17 +1,27 @@
 #!/bin/sh
 # Claude Code hook -> The Stack intake. Reads the hook's JSON input on stdin
-# and POSTs it untouched. Never blocks or fails the agent's turn.
+# and POSTs it untouched. Never blocks or fails the agent's turn; when the
+# POST doesn't land, it says why in STACK_HOOK_LOG (default
+# ~/.claude/stack-hook.log). `bin/rails stack:doctor` checks the whole path.
 #
-#   STACK_URL    e.g. http://mac-studio.tailnet-name.ts.net:3000
+#   STACK_URL    e.g. http://127.0.0.1:3005
 #   STACK_TOKEN  the claude-code source token (see /sources)
 # The secretary's own claude runs are marked internal; they are not agents.
 # Runs onbox started itself report their own reply.
 [ -n "$STACK_INTERNAL" ] && exit 0
 [ -n "$STACK_LAUNCHED" ] && exit 0
-[ -n "$STACK_URL" ] && [ -n "$STACK_TOKEN" ] || exit 0
-curl -sS --max-time 5 -o /dev/null \
+log="${STACK_HOOK_LOG:-$HOME/.claude/stack-hook.log}"
+if [ -z "$STACK_URL" ] || [ -z "$STACK_TOKEN" ]; then
+  echo "$(date '+%F %T') STACK_URL or STACK_TOKEN isn't set for this session" >> "$log" 2>/dev/null
+  exit 0
+fi
+status=$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' \
   -H "Authorization: Bearer $STACK_TOKEN" \
   -H "Content-Type: application/json" \
   --data-binary @- \
-  "$STACK_URL/intake" || true
+  "$STACK_URL/intake" 2>&1)
+case "$status" in
+  2??) ;;
+  *) echo "$(date '+%F %T') POST $STACK_URL/intake: $status" >> "$log" 2>/dev/null ;;
+esac
 exit 0

@@ -38,4 +38,43 @@ class ClaudeSetupTest < ActiveSupport::TestCase
   ensure
     FileUtils.rm_f(log) if log
   end
+
+  test "the doctor walks the path from a Stop to a card and says where it breaks" do
+    server = TCPServer.new("127.0.0.1", 0)
+    thread = Thread.new do
+      loop do
+        client = server.accept
+        client.gets
+        headers = {}
+        while (line = client.gets) && line != "\r\n"
+          name, value = line.split(":", 2)
+          headers[name.downcase] = value.to_s.strip
+        end
+        body = JSON.parse(client.read(headers["content-length"].to_i))
+        ok = headers["authorization"] == "Bearer #{sources(:claude_code).token}"
+        Intake.receive(sources(:claude_code), body) if ok
+        client.write("HTTP/1.1 #{ok ? "202 Accepted" : "401 Unauthorized"}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        client.close
+      end
+    end
+    url = "http://127.0.0.1:#{server.addr[1]}"
+
+    with_env("HOME" => @home.to_s, "STACK_CLAUDE_BIN" => FAKE_CLAUDE, "STACK_SELF_URL" => url) do
+      ClaudeSetup.connect!
+      healthy = ClaudeSetup.doctor
+      assert healthy.select { |line| line.start_with?("NO") }.empty?, healthy.join("\n")
+      assert_includes healthy, "ok  the hook script delivers a card"
+      assert_empty Card.open.where("key LIKE ?", "claude_code:onbox-doctor%"), "test cards are cleared"
+
+      settings = JSON.parse(File.read(@home.join(".claude/settings.json")))
+      settings["env"]["STACK_TOKEN"] = "stale"
+      File.write(@home.join(".claude/settings.json"), settings.to_json)
+      broken = ClaudeSetup.doctor
+      assert broken.any? { |line| line.start_with?("NO  STACK_TOKEN there matches") }
+      assert broken.any? { |line| line.start_with?("NO  onbox answers at #{url}/intake (401)") }
+    end
+  ensure
+    thread&.kill
+    server&.close
+  end
 end

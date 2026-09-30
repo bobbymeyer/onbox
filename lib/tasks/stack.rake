@@ -12,3 +12,10 @@ namespace :stack do
     puts ClaudeSetup.connect!
   end
 end
+
+namespace :stack do
+  desc "Check why Claude Code replies aren't reaching the stack (sends and clears two test cards)"
+  task doctor: :environment do
+    puts ClaudeSetup.doctor
+  end
+end

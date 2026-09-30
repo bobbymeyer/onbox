@@ -4,6 +4,9 @@
 #                  plus a standing instruction in ~/.claude/CLAUDE.md;
 #   desktop app  - the bridge in claude_desktop_config.json.
 # Each file is backed up before it changes, and no token is ever printed.
+# ClaudeSetup.doctor checks that path end to end.
+require "net/http"
+
 module ClaudeSetup
   INSTRUCTION_MARK = "<!-- onbox: the stack -->".freeze
   INSTRUCTION = <<~MD.freeze
@@ -71,6 +74,66 @@ module ClaudeSetup
     (config["mcpServers"] ||= {})["stack"] = StackMcp.server.except("type")
     write_json(desktop_path, config)
     "Desktop app: stack tools added (#{desktop_path}). Quit and reopen Claude to load them."
+  end
+
+  DOCTOR_SESSION = "onbox-doctor".freeze
+
+  # Checks every step from a Claude Code session's Stop to a card, and says
+  # which one breaks. Sends two test cards (straight to onbox, then through
+  # the hook script) and clears them. Returns a line per check.
+  def doctor
+    lines = []
+    check = ->(ok, text) { lines << "#{ok ? "ok " : "NO "} #{text}"; ok }
+    settings = read_json(settings_path)
+    env = settings["env"] || {}
+    url, token = env["STACK_URL"].presence, env["STACK_TOKEN"].presence
+    hook = Rails.root.join("script/stack-hook").to_s
+    source = ClaudeRun.source
+
+    check.(settings_path.exist?, "#{settings_path} exists")
+    check.(settings["disableAllHooks"] != true, "hooks aren't turned off there (disableAllHooks)")
+    check.(url.present?, "STACK_URL is set there#{" (#{url})" if url}")
+    check.(token.present? && ActiveSupport::SecurityUtils.secure_compare(token, source.token),
+           "STACK_TOKEN there matches the #{source.name} source's current token#{" (it was rotated? run bin/rails stack:connect)" unless token.present? && ActiveSupport::SecurityUtils.secure_compare(token, source.token)}")
+    %w[Stop Notification].each do |event|
+      commands = Array(settings.dig("hooks", event)).flat_map { |entry| Array(entry["hooks"]).map { |h| h["command"] } }
+      check.(commands.include?(hook), "the #{event} hook runs #{hook}#{" (found: #{commands.join(", ").presence || "none"})" unless commands.include?(hook)}")
+    end
+    check.(File.executable?(hook), "#{hook} is executable")
+
+    if url && token
+      code = post_test(url, token, "#{DOCTOR_SESSION}-direct")
+      if check.(code.start_with?("2"), "onbox answers at #{url}/intake (#{code})")
+        log = Rails.root.join("tmp/stack-hook-doctor.log").to_s
+        FileUtils.rm_f(log)
+        env = { "STACK_URL" => url, "STACK_TOKEN" => token, "STACK_HOOK_LOG" => log, "STACK_LAUNCHED" => nil, "STACK_INTERNAL" => nil }
+        Open3.capture2e(env, hook, stdin_data: test_payload("#{DOCTOR_SESSION}-hook").to_json)
+        arrived = source.cards.exists?(key: "claude_code:#{DOCTOR_SESSION}-hook")
+        check.(arrived, "the hook script delivers a card#{": #{File.read(log).strip}" if !arrived && File.exist?(log)}")
+      end
+    end
+    source.cards.open.where("key LIKE ?", "claude_code:#{DOCTOR_SESSION}%").find_each { |card| card.handle!(with: "stack:doctor") }
+
+    last = source.cards.where.not("key LIKE ?", "claude_code:#{DOCTOR_SESSION}%").maximum(:created_at)
+    lines << "Last Claude Code card: #{last ? "#{ActionController::Base.helpers.time_ago_in_words(last)} ago" : "never"}"
+    hook_log = home.join(".claude/stack-hook.log")
+    lines << "Recent hook failures (#{hook_log}):\n#{hook_log.read.lines.last(5).join}" if hook_log.exist? && hook_log.size.positive?
+    lines << "Sessions started before the hooks were set up don't have them; restart those sessions."
+    lines
+  end
+
+  def test_payload(session)
+    { "session_id" => session, "hook_event_name" => "Stop", "cwd" => Rails.root.to_s,
+      "last_assistant_message" => "Test card from bin/rails stack:doctor" }
+  end
+
+  def post_test(url, token, session)
+    uri = URI.join(url.chomp("/") + "/", "intake")
+    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "Authorization" => "Bearer #{token}")
+    req.body = test_payload(session).to_json
+    Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: 5, read_timeout: 10) { |http| http.request(req) }.code
+  rescue SystemCallError, SocketError, Net::OpenTimeout, Net::ReadTimeout, OpenSSL::SSL::SSLError => e
+    "unreachable: #{e.message}"
   end
 
   def read_json(path)

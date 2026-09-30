@@ -155,6 +155,14 @@ each file it changes and never printing the token:
   (reopen the app). Add the same standing instruction under Settings →
   Profile so chats use them.
 
+When replies from Claude Code sessions don't reach the stack, run
+`bin/rails stack:doctor` the same way: it checks the settings, the token, the
+hook and onbox's address, sends two test cards (straight in, then through the
+hook script) and clears them, and says which step breaks. The hook itself
+never fails a session; it writes why a POST didn't land to
+`~/.claude/stack-hook.log`. Sessions started before the hooks were set up
+need restarting.
+
 Chats on claude.ai in a browser or on the phone run on Anthropic's servers
 and can't reach a tailnet-only onbox; start those from onbox instead.
 
