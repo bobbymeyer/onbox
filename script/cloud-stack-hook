@@ -16,6 +16,7 @@ Only acts in cloud sessions; local sessions report through ~/.claude.
 """
 import json
 import os
+import socket
 import sys
 import urllib.request
 
@@ -47,6 +48,19 @@ def last_reply(path):
     return None
 
 
+# Tailscale Funnel publishes AAAA records for a node whose IPv6 ingress doesn't
+# answer, and a cloud container resolves IPv6 first, so the POST dies in the TLS
+# handshake. Prefer IPv4, keeping IPv6 for a host that resolves to nothing else.
+def prefer_ipv4():
+    resolve = socket.getaddrinfo
+
+    def getaddrinfo(*args, **kwargs):
+        found = resolve(*args, **kwargs)
+        return [a for a in found if a[0] == socket.AF_INET] or found
+
+    socket.getaddrinfo = getaddrinfo
+
+
 def main():
     if os.environ.get("CLAUDE_CODE_REMOTE") != "true":
         return
@@ -61,6 +75,8 @@ def main():
     if not payload.get("last_assistant_message"):
         payload["last_assistant_message"] = last_reply(payload.get("transcript_path") or "")
     payload.pop("transcript_path", None)  # onbox can't read the cloud's files
+
+    prefer_ipv4()
 
     headers = {"Content-Type": "application/json"}
     if os.environ.get("STACK_TOKEN"):
