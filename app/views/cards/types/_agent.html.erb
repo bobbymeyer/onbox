@@ -3,3 +3,6 @@
   <%= f.text_area :text, value: card.proposed_action, placeholder: card.type.tool_placeholder, rows: 3 %>
   <%= f.submit card.type.send_label, class: "tool-send" %>
 <% end %>
+<% if card.payload["remote_session_url"].present? %>
+  <p class="hint">Running in the cloud. <%= link_to "Open the session", card.payload["remote_session_url"], target: "_blank", rel: "noopener" %></p>
+<% end %>

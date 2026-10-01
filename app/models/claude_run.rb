@@ -166,7 +166,8 @@ class ClaudeRun < ApplicationRecord
     class << self
       # The source runs' cards arrive under: the Claude Code one.
       def source
-        Source.find_by(kind: "claude_code") || Source.create!(name: "claude-code", kind: "claude_code")
+        Source.find_by(name: "claude-code", kind: "claude_code") || Source.find_by(kind: "claude_code") ||
+          Source.create!(name: "claude-code", kind: "claude_code")
       end
     end
 end

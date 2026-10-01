@@ -17,6 +17,7 @@ over Tailscale.
 |---|---|---|
 | Claude (from onbox) | **Ask Claude** starts a chat or a project session on the Mac | Your reply continues the session; permission prompts are Allow/Deny cards |
 | Claude Code | Stop and Notification hooks (`script/stack-hook`), and the stack tools | Sends your instruction back to the session on your Max plan |
+| Claude Code on the web | The repo's Stop hook (`script/cloud-stack-hook`) through the Studio's Tailscale Funnel | Sends your answer into the cloud session (`claude --cloud`) |
 | Claude desktop app | The stack tools (`post_to_stack`, `check_stack`) | Claude reads your answer with `check_stack` |
 | Mail (the Mac's) | Read every 2 minutes through Mail's scripting | Replies in the thread, archives it, or marks it read; mail you read in Mail clears its card |
 | Calendar (the Mac's) | Read every 2 minutes through EventKit | Invitations you answer in Calendar clear themselves; moves and cancellations are heads-ups |
@@ -163,8 +164,37 @@ never fails a session; it writes why a POST didn't land to
 `~/.claude/stack-hook.log`. Sessions started before the hooks were set up
 need restarting.
 
-Chats on claude.ai in a browser or on the phone run on Anthropic's servers
-and can't reach a tailnet-only onbox; start those from onbox instead.
+### Claude Code on the web
+
+Sessions at claude.ai/code run on Anthropic's cloud, not the Studio, and onbox
+lets them stay there. Each one reports itself: a Stop hook committed in the
+repository posts the session's last reply to onbox, and the card links to the
+session. Your answer on the card goes back into it with `claude -p … --cloud
+<session>`, which queues it even while the session is busy; its next Stop
+brings the reply back.
+
+Setting it up:
+
+1. **A public door for the intake only.** On the Studio, Tailscale Funnel
+   exposes `/intake` and nothing else, e.g.
+   `tailscale funnel --bg --https=8443 --set-path=/intake http://127.0.0.1:3005/intake`.
+   The intake needs a source token and is rate limited.
+2. **A source for the cloud.** On `/sources`, create `claude-cloud` (kind
+   `claude_code`), so its token can be rotated on its own.
+3. **The cloud environment.** In claude.ai/code's environment settings, set
+   `STACK_URL` (the Funnel address, e.g. `https://studio.<tailnet>.ts.net:8443`)
+   and `STACK_TOKEN` (the claude-cloud token) as environment variables, and add
+   the Funnel host to the allowed domains under Network access.
+4. **The hook in each repository.** `bin/rails stack:cloud_hook[/path/to/repo]`
+   adds `.claude/hooks/stack-hook` and the Stop/Notification entries to its
+   `.claude/settings.json`; commit both. (onbox's own repository has it.) The
+   hook does nothing outside the cloud, so local sessions aren't reported
+   twice. Sessions with several repositories don't load repository hooks.
+5. **Replies.** `--cloud` needs the CLI's own login on the Studio (`claude auth
+   login`), not just the token onbox holds, and remote sessions allowed for the
+   account.
+
+Chats on claude.ai in a browser or on the phone still can't post to the stack.
 
 ### Claude Code hooks
 
@@ -353,9 +383,11 @@ otherwise after your next gesture. Idle periods get nothing.
 - The noticer matches phrases exactly after normalizing, so it won't see that
   "PR and merge" and "open a PR then merge" are the same request.
 - Not built: noticing when grooming time outruns handling time.
-- Claude chats on claude.ai (web, phone) and cloud Claude Code sessions can't
-  reach a tailnet-only onbox; only Claude on this Mac (desktop app, Claude
-  Code) posts to the stack.
+- Claude chats on claude.ai (web, phone) can't post to the stack. Cloud
+  Claude Code sessions can, through the Funnel, once their repository has the
+  hook.
+- Permission prompts in cloud sessions stay in the session (claude.ai/code);
+  only their Notification shows up as a card.
 - Permission prompts become cards only for runs onbox starts. A session in a
   terminal still asks in the terminal (its Notification hook makes a card
   saying so).

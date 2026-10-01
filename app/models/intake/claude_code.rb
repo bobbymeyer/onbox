@@ -19,6 +19,8 @@ module Intake
         else [ first_line(last_message) || "Agent finished its turn", "review" ]
         end
 
+      payload = payload.merge("remote_session_url" => CloudSession.url(payload["remote_session_id"])) if payload["remote_session_id"].present?
+
       Event.new(
         key: session_id.present? ? "claude_code:#{session_id}" : nil,
         project: project,

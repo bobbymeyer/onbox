@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Claude Code on the web -> The Stack.
+
+A Stop/Notification hook for repositories whose Claude Code sessions run in
+Anthropic's cloud. Commit it as .claude/hooks/stack-hook in the repository
+(with the hooks in .claude/settings.json; see `bin/rails stack:cloud_hook`).
+It POSTs the hook's input to onbox's intake, adding the cloud session's id
+and its last reply, so the card can be answered (onbox sends the answer back
+with `claude --cloud`). Never blocks or fails the session.
+
+  STACK_URL    onbox's public intake address (the Studio's Tailscale Funnel)
+  STACK_TOKEN  the claude-cloud source's token; leave unset when the cloud
+               environment attaches it as an API credential instead
+
+Only acts in cloud sessions; local sessions report through ~/.claude.
+"""
+import json
+import os
+import sys
+import urllib.request
+
+TAIL_BYTES = 256 * 1024
+
+
+def last_reply(path):
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(f.tell() - TAIL_BYTES, 0))
+            lines = f.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if entry.get("type") != "assistant":
+            continue
+        content = (entry.get("message") or {}).get("content")
+        if isinstance(content, str):
+            text = content
+        else:
+            text = "\n".join(b.get("text", "") for b in content or [] if isinstance(b, dict) and b.get("type") == "text")
+        if text.strip():
+            return text
+    return None
+
+
+def main():
+    if os.environ.get("CLAUDE_CODE_REMOTE") != "true":
+        return
+    url = os.environ.get("STACK_URL", "").rstrip("/")
+    if not url:
+        return
+    try:
+        payload = json.load(sys.stdin)
+    except ValueError:
+        return
+    payload["remote_session_id"] = os.environ.get("CLAUDE_CODE_REMOTE_SESSION_ID")
+    if not payload.get("last_assistant_message"):
+        payload["last_assistant_message"] = last_reply(payload.get("transcript_path") or "")
+    payload.pop("transcript_path", None)  # onbox can't read the cloud's files
+
+    headers = {"Content-Type": "application/json"}
+    if os.environ.get("STACK_TOKEN"):
+        headers["Authorization"] = "Bearer " + os.environ["STACK_TOKEN"]
+    request = urllib.request.Request(url + "/intake", data=json.dumps(payload).encode(), headers=headers, method="POST")
+    try:
+        urllib.request.urlopen(request, timeout=10).read()
+    except Exception as error:  # never fail the session
+        print(f"stack-hook: {error}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

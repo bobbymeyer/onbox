@@ -43,13 +43,15 @@ module ClaudeCli
 
   # internal: the secretary's own runs, which the stack hook ignores so they
   # never become cards. The claude binary's own directory goes on PATH, so an
-  # npm-installed claude finds its node.
-  def env(internal: false)
+  # npm-installed claude finds its node. login: the CLI's own `claude auth
+  # login` instead of the token onbox holds, for commands that need the full
+  # account login (sending to cloud sessions).
+  def env(internal: false, login: false)
     vars = STRIPPED.to_h { |key| [ key, nil ] }.merge("STACK_INTERNAL" => internal ? "1" : nil)
     dir = File.dirname(bin)
     vars["PATH"] = [ dir, ENV["PATH"] ].compact_blank.join(":") if bin.include?("/")
-    token = Credential.claude_token&.secret
-    token ? vars.merge("CLAUDE_CODE_OAUTH_TOKEN" => token) : vars
+    token = Credential.claude_token&.secret unless login
+    vars.merge("CLAUDE_CODE_OAUTH_TOKEN" => token)
   end
 
   def on_path

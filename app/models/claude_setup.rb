@@ -76,6 +76,32 @@ module ClaudeSetup
     "Desktop app: stack tools added (#{desktop_path}). Quit and reopen Claude to load them."
   end
 
+  CLOUD_HOOK = Rails.root.join("script/cloud-stack-hook")
+  CLOUD_HOOK_COMMAND = 'python3 "$CLAUDE_PROJECT_DIR/.claude/hooks/stack-hook"'.freeze
+
+  # Puts the cloud hook in a repository checkout, so its Claude Code on the
+  # web sessions report to the stack once committed: the script as
+  # .claude/hooks/stack-hook and the Stop/Notification hooks in its
+  # .claude/settings.json, keeping whatever else is there.
+  def install_cloud_hook!(repo)
+    repo = Pathname(repo).expand_path
+    raise ArgumentError, "#{repo} isn't a git checkout" unless repo.join(".git").exist?
+    hooks_dir = repo.join(".claude/hooks").tap(&:mkpath)
+    FileUtils.cp(CLOUD_HOOK, hooks_dir.join("stack-hook"))
+    File.chmod(0o755, hooks_dir.join("stack-hook"))
+
+    path = repo.join(".claude/settings.json")
+    settings = read_json(path)
+    settings["hooks"] ||= {}
+    %w[Stop Notification].each do |event|
+      entries = settings["hooks"][event] ||= []
+      next if entries.any? { |entry| Array(entry["hooks"]).any? { |h| h["command"] == CLOUD_HOOK_COMMAND } }
+      entries << { "hooks" => [ { "type" => "command", "command" => CLOUD_HOOK_COMMAND } ] }
+    end
+    path.write(JSON.pretty_generate(settings) + "\n")
+    "#{repo.basename}: commit .claude/hooks/stack-hook and .claude/settings.json, then its cloud sessions report to the stack"
+  end
+
   DOCTOR_SESSION = "onbox-doctor".freeze
 
   # Checks every step from a Claude Code session's Stop to a card, and says

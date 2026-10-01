@@ -3,6 +3,9 @@
 class IntakeController < ActionController::API
   include ActionController::HttpAuthentication::Token::ControllerMethods
 
+  # The intake is the one path open to the internet (cloud sessions reach
+  # it through the Studio's Tailscale Funnel), so it's rate limited too.
+  rate_limit to: 120, within: 1.minute, with: -> { render json: { error: "slow down" }, status: :too_many_requests }
   before_action :authenticate_source
 
   def create

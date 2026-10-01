@@ -19,3 +19,10 @@ namespace :stack do
     puts ClaudeSetup.doctor
   end
 end
+
+namespace :stack do
+  desc "Add the cloud stack hook to a repository checkout: bin/rails stack:cloud_hook[/path/to/repo]"
+  task :cloud_hook, [ :repo ] => :environment do |_, args|
+    puts ClaudeSetup.install_cloud_hook!(args[:repo].presence || Dir.pwd)
+  end
+end
